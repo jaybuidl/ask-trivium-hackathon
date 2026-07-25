@@ -2,8 +2,7 @@
 
 **Status: partially frozen.** §1–§6 are decided and safe to build against. §7 lists the questions
 still open; each names the ticket that has to decide it, because you cannot write that ticket's code
-without an answer. **Item 1 (`detail`) was decided in ticket 02 and is recorded below** — the
-backend's copy needs the same change.
+without an answer.
 
 This is the CLI's copy. The backend holds its own hand-written copy of the same contract —
 deliberately no shared package, because a private dependency would break the open-source build and
@@ -12,6 +11,34 @@ a hundred lines of duplicated schema is the accepted price of the closed/open sp
 changes, the other copy changes by hand, and neither side may change it unilaterally.**
 
 Everything you need is in this file. It does not point into the closed repo for anything.
+
+---
+
+<!-- contract-rev: 3 -->
+
+## Mirror state
+
+Two copies, no shared package, so the only thing keeping them together is that someone carries a
+change across. **This table is that record.** Read it before implementing against this file: if your
+side's box is empty, you are about to build against a superseded contract.
+
+| rev | change | CLI | backend |
+|-----|--------------------------------------------------------------------|------------|------------|
+| 3 | §5 trap (c): which side of the boundary it actually binds | ✅ `51ac102` | ⬜ |
+| 2 | Ticket 02 — `detail` removed, one response shape (§2); §4 branches on `mode` first; §1 `mode` optional at the tool boundary | ✅ `cded448` | ✅ `f57d7a9` |
+| 1 | The contract as first written down | ✅ `de521d9` | ✅ `293fb0c` |
+
+**Changing this file means adding a row.** Bump `contract-rev`, tick your own side, leave the other
+empty — the empty box is the whole point, and it is what tells the other side there is something to
+carry. Tick a box only when that side's code actually matches, not when someone has been told.
+
+Backend SHAs are from the engine repo's `server/contract.ts`, which is what serves the wire. That
+side also keeps a prose copy; if the two disagree, the executable one is what a caller experiences.
+
+Rev 2 is the case this table exists for. It was recorded only in a commit message saying the backend
+needed the same change — and the backend went on serving the superseded contract until a human
+happened to read that message. A commit message is not a delivery mechanism; an empty box in a file
+both sides must read is.
 
 ---
 
