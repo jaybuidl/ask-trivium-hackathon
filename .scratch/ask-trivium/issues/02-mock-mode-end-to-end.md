@@ -68,8 +68,11 @@ inbound leg is written against the MCP SDK directly. `--mcp` is intercepted in `
 loads. Both surfaces share one `analyze` and one `renderPanel`.
 
 **Notes for the tickets downstream:**
-- `incur` pulls zod **4.4.3**, and `@x402/*` pins zod **^3.24.2** (§5 trap c). They will install
-  side by side. Never hand a zod-4 schema to anything under `@x402/*` in ticket 04.
+- `incur` pulls zod **4.4.3**, and `@x402/*` pins zod **^3.24.2** (§5 trap c). This does **not**
+  land in ticket 04 — 04 is payment-free and adds no x402 dependency. It belongs to ticket 06, and
+  the finding is written up in that ticket's Comments: the packages coexist by nesting, zod never
+  crosses the boundary in the bridge's direction, and the trap is live for the backend rather than
+  for this repo.
 - Ticket 07 replaces the *contents* of `src/fixture.ts` only. `src/fixture.test.ts` is the list of
   invariants that replacement has to keep — nine cells, three personas x three models, real spread,
   `mode: "mock"`, `settled: false`, nothing shaped like a private key.

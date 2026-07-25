@@ -48,3 +48,45 @@ not in an example, not in a test, not in a commit that gets amended later.
 - [ ] The payment timeout is set above the worst case, and this is verified rather than assumed
 - [ ] The nine reasoning strings are grepped and the result recorded
 - [ ] `idempotency_key`'s source is decided and recorded in `docs/wire-contract.md`
+
+## Comments
+
+### The zod 3 / zod 4 trap, verified against the published packages (from ticket 02)
+
+`incur` puts **zod 4.4.3** at this repo's root. The x402 packages pin **zod ^3.24.2**. Probed the
+real packages rather than reasoning from the pin, and the trap is narrower than §5 trap (c) reads:
+
+- **Not a resolution conflict.** `zod` is a regular dependency of `@x402/{core,mcp,evm}`, not a peer.
+  npm nests it: zod 4.4.3 at the root, zod 3.25.76 under each x402 package, side by side and quiet.
+  No `overrides`, no `resolutions`, nothing to configure. Do not "fix" this.
+- **zod never crosses the boundary in the bridge's direction.** It appears nowhere in
+  `@x402/mcp`'s public type signatures — the only occurrence in the whole `.d.ts` is inside a
+  doc-comment example. `wrapMCPClientWithPayment(mcpClient, paymentClient, options)` and
+  `createx402MCPClient(config)` take an MCP SDK `Client` and an `x402Client`. We pass plain JSON
+  objects; x402's zod parses its own payment payloads, never our schemas.
+- **The shared type dedupes.** `@x402/mcp` wants `@modelcontextprotocol/sdk ^1.12.1`; this repo is
+  on `^1.29.0`, which satisfies it, so exactly one SDK copy resolves. That was the actual risk —
+  two copies would make our `Client` and its `Client` two nominally distinct types — and it is
+  absent today.
+- `zod@3.25.76` is the transitional release shipping **both** v3 and v4 APIs (a `zod/v4` subpath),
+  so "they pin zod 3" is imprecise. Immaterial here, but do not expect classic-zod-3 internals.
+
+**Where the trap is actually live: the backend, not here.** The API that takes zod schemas is
+`createPaymentWrapper(resourceServer, config)` — the server-side helper, whose doc example is
+`mcpServer.tool("search", "...", { query: z.string() }, ...)`. That is the resource server, which
+is the backend's job; §5 says the bridge uses the client-side wrapper. **In this repo the only way
+to reach the zod trap is to be writing backend code in the wrong repo** — treat reaching for
+`createPaymentWrapper` here as the boundary alarm it is, not as a dependency puzzle to solve.
+
+**Plan for this ticket:** change nothing about zod. No overrides. Keep this repo's schemas on root
+zod 4, never import from `@x402/*/node_modules/zod`, and pass only plain objects across the x402
+boundary.
+
+**One cheap guard worth adding when x402 lands:** assert exactly one `@modelcontextprotocol/sdk`
+resolves. If a future x402 release moves its SDK pin outside this repo's range, the SDK forks into
+two copies and the `Client` type identity breaks — which surfaces as baffling structural type
+errors, at whatever hour this gets wired up. Failing loudly at install time is much cheaper.
+
+**Proposed contract change, NOT made — needs the backend's agreement.** §5 trap (c) is correct for
+the backend's copy and misleading for this one. It would be worth annotating with which side it
+binds, but the contract is hand-copied and neither side may change it unilaterally.
