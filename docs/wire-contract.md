@@ -1,8 +1,9 @@
 # The wire contract
 
-**Status: partially frozen.** §1–§6 are decided and safe to build against. §7 lists three questions
+**Status: partially frozen.** §1–§6 are decided and safe to build against. §7 lists the questions
 still open; each names the ticket that has to decide it, because you cannot write that ticket's code
-without an answer.
+without an answer. **Item 1 (`detail`) was decided in ticket 02 and is recorded below** — the
+backend's copy needs the same change.
 
 This is the CLI's copy. The backend holds its own hand-written copy of the same contract —
 deliberately no shared package, because a private dependency would break the open-source build and
@@ -23,13 +24,12 @@ const AnalyzeDisputeInput = z.object({
   title: z.string().min(1).max(200),
   content: z.string().min(1).max(50_000),
 
-  // How much of the panel to return. See §2 — and §7 item 1, this may collapse.
-  detail: z.enum(["verdict", "panel", "full"]).default("panel"),
-
   // Which tier this call runs against. Per-call, not per-deployment (ADR-0011).
   // Default comes from ASK_TRIVIUM_MODE at MCP registration, else "mock".
   // "mock" is served entirely by the bridge and never reaches the server (ADR-0012).
   // Give each value a real description — tools/list is the only documentation an agent reads.
+  // OPTIONAL at the bridge's tool boundary, required by the time it reaches the backend: the
+  // bridge resolves explicit value -> ASK_TRIVIUM_MODE -> "mock" before forwarding.
   mode: z.enum(["mock", "testnet", "mainnet"]),
 
   // Paid API: lets a client safely retry after a dropped connection without paying
@@ -47,7 +47,25 @@ MCP tools return both a `content` array (human-readable) and `structuredContent`
 validated against `outputSchema`). Use both: agents consume the structured form, humans read the
 text rendering. The bridge renders the text form itself when driven by a human.
 
-### `detail: "verdict"` — the floor
+### One response shape
+
+**`detail` is gone** — decided in ticket 02, which could not render without an answer to §7 item 1.
+There are no longer three response shapes; every successful call returns `PanelResponse` below.
+
+The reasoning, so neither side reopens it casually:
+
+- `detail` never changed what the backend computes. All nine cells run regardless (§4: nine or the
+  call is free) and the price is a flat $1, so it was never a cost lever — only a response-size one.
+- MCP exposes exactly **one `outputSchema` per tool**. Three shapes means either an unvalidatable
+  union or making every field below `Verdict` optional, and then an agent can never rely on `panel`
+  being present. A schema that cannot promise its own fields is not worth publishing.
+- The only real argument for it was agent token cost. Nine `reasoning` strings run ~2k tokens —
+  a fraction of a cent against a $1 call. The token argument is quantitatively dead at this price.
+- Response trimming is a client concern and stays available client-side; it does not need to cross
+  the wire.
+
+`detail: "full"`'s per-cell flag booleans and free-text notes are dropped with it. Nothing rendered
+them, and they can come back as a separate field if something ever needs them.
 
 ```ts
 const Verdict = z.object({
@@ -70,8 +88,9 @@ const Verdict = z.object({
 
   // Was the caller actually charged? (ADR-0014). Same principle as `mode`: an agent must be
   // able to relay "you weren't billed" without parsing _meta, which many clients never
-  // surface. false in mock. The *reason* it was free is derivable: analysesCompleted < 9
-  // means an incomplete panel, otherwise settlement failed.
+  // surface. false in mock. The *reason* it was free is derivable, but branch on mode first:
+  // mode === "mock" means free by design; otherwise analysesCompleted < analysesRequested
+  // means an incomplete panel, and failing that, settlement failed. See §4.
   settled: z.boolean(),
   settlementTx: z.string().optional(),      // present iff settled
 });
@@ -82,10 +101,8 @@ the wire — not because they are secret, but because they are noise for the cal
 them, and do not compute anything else the backend already decided.** The bridge renders; it never
 derives a verdict.
 
-### `detail: "panel"` — the default
-
-Adds the nine cells. This is the evidence that justifies the price, and the thing worth rendering
-well.
+The nine cells always accompany it. They are the evidence that justifies the price, and the thing
+worth rendering well.
 
 ```ts
 const PanelEntry = z.object({
@@ -110,10 +127,6 @@ anonymous rows. The prompt text behind those names is a separate matter and neve
 All nine `reasoning` strings ship unsanitised (ADR-0010). The bridge must render them verbatim: no
 truncation of the string it stores, no rewriting, no "cleaning up". Visual truncation for a narrow
 terminal is fine as long as the full string survives in `structuredContent`.
-
-### `detail: "full"`
-
-Adds per-cell flag booleans and free-text notes.
 
 ## 3. Progress notifications
 
@@ -159,6 +172,12 @@ what is advertised; delivering six is selling something that wasn't delivered.
 **There is no refund path**, and one must never be built here: x402 has no refund primitive, and
 doing it by hand needs a return transfer, gas, and a funded hot wallet. Not settling is the only
 lever, and it is the server's lever.
+
+**The "why was it free" rule above applies only when `mode` is a paying tier.** A `mock` run is also
+`settled: false` with all nine cells present, so reading the rule unconditionally tells a mock user
+their *payment failed*, which is both false and alarming. `mock` is free by design and is not a
+giveaway (`CONTEXT.md`). Branch on `mode` first, then on `analysesCompleted`. The bridge's renderer
+does exactly this.
 
 Two things the caller must always be able to tell apart: **"you paid and got a degraded answer"** —
 which under this rule never happens — and **"you weren't charged, here's why."** `analysesCompleted`
@@ -259,11 +278,12 @@ wallet management, output rendering, this contract's schemas, and the embedded m
 
 ## 7. Still open
 
-Three questions. Each is assigned to the ticket that cannot be written without it — decide it there,
-record the decision in this file, and mirror it to the backend's copy.
+Two questions remain. Each is assigned to the ticket that cannot be written without it — decide it
+there, record the decision in this file, and mirror it to the backend's copy.
 
-1. **Does `detail` survive?** Three response shapes, or one fixed shape? — ticket 02, which cannot
-   render without knowing.
+1. ~~**Does `detail` survive?**~~ **DECIDED (ticket 02): it does not.** One response shape,
+   `PanelResponse`. Rationale in §2; `detail` is removed from §1 and `detail: "full"`'s per-cell
+   flags and notes are dropped. The backend's copy needs the same change.
 2. **`idempotency_key`: client-supplied or derived from the payment nonce?** It stays either way:
    the EIP-3009 nonce prevents replay of *the same* authorization, but a client retrying after a
    dropped connection signs a fresh one and pays twice, and only an application-level key closes

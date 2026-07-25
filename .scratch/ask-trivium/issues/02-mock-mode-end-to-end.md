@@ -10,7 +10,7 @@ comes first rather than last.
 
 **Blocked by:** Nothing. This is the frontier.
 
-**Status:** ready-for-agent
+**Status:** in-review
 
 ## Notes
 
@@ -29,14 +29,51 @@ here, and record the decision in the contract.
 Read `docs/wire-contract.md` §1, §2 and §6 before starting. §6 is the list this repo is reviewed
 against, and a fixture is exactly the kind of file that quietly acquires things it should not have.
 
-- [ ] The CLI runs as a stdio MCP server and advertises `analyze_dispute` with a tool description an
+- [x] The CLI runs as a stdio MCP server and advertises `analyze_dispute` with a tool description an
       agent can act on unaided
-- [ ] `mode: "mock"` returns a complete panel entirely from an embedded fixture, with no network
+- [x] `mode: "mock"` returns a complete panel entirely from an embedded fixture, with no network
       access of any kind
-- [ ] Both `content` (human-readable) and `structuredContent` (schema-valid) are returned
-- [ ] `mode` and `settled` appear in the payload — an agent relaying the result can tell it was mock
+- [x] Both `content` (human-readable) and `structuredContent` (schema-valid) are returned
+- [x] `mode` and `settled` appear in the payload — an agent relaying the result can tell it was mock
       and unpaid without reading terminal output or `_meta`
-- [ ] Rendering is legible in a terminal: nine cells with model, persona, score and reasoning, plus
+- [x] Rendering is legible in a terminal: nine cells with model, persona, score and reasoning, plus
       the verdict and agreement
-- [ ] The fixture is embedded in the published package, not read from disk at runtime
-- [ ] `detail` is decided and the decision recorded in `docs/wire-contract.md`
+- [x] The fixture is embedded in the published package, not read from disk at runtime
+- [x] `detail` is decided and the decision recorded in `docs/wire-contract.md`
+
+## Comments
+
+Built as `src/{contract,fixture,analyze,render,mcp,cli,bin}.ts`. 54 tests, typecheck clean.
+`mcp.test.ts` drives the server over an in-process transport; `stdio.test.ts` spawns `src/bin.ts`
+as a real subprocess over real stdio framing, which is what catches `--mcp` not being intercepted
+and anything polluting stdout and desynchronising the JSON-RPC stream. The built `dist/bin.js` was
+additionally driven by hand as a subprocess — that one is a manual check, not in the suite.
+
+**`detail` is decided: it collapses to one shape.** Recorded in `docs/wire-contract.md` §2, with
+§1 and §7 item 1 updated. **The backend's copy needs the same change.** Short version: `detail`
+never changed what the backend computes (all nine cells run regardless), MCP publishes exactly one
+`outputSchema` per tool so three shapes would force every field below `Verdict` to be optional, and
+the token saving it bought is a fraction of a cent against a $1 call.
+
+**A second contract correction fell out of the renderer.** §4's "why was it free" rule —
+`analysesCompleted < 9` means incomplete, otherwise settlement failed — misreads a mock run, which
+is also `settled: false` with nine cells, as a *failed payment*. Branch on `mode` first. Fixed in
+§4 and in the `settled` comment in §2; the backend's copy needs this too.
+
+**incur is the human CLI only; the MCP server is hand-rolled.** incur's built-in `--mcp` sets
+`content` to `JSON.stringify(data)` — the same bytes as `structuredContent`, so no human rendering —
+and its streaming progress emits `{progress: ++i, message}` with no `total`, against §3's
+`{progress, total: 9, message}`. Since §3 progress forwarding is load-bearing for ticket 04, the
+inbound leg is written against the MCP SDK directly. `--mcp` is intercepted in `bin.ts` before incur
+loads. Both surfaces share one `analyze` and one `renderPanel`.
+
+**Notes for the tickets downstream:**
+- `incur` pulls zod **4.4.3**, and `@x402/*` pins zod **^3.24.2** (§5 trap c). They will install
+  side by side. Never hand a zod-4 schema to anything under `@x402/*` in ticket 04.
+- Ticket 07 replaces the *contents* of `src/fixture.ts` only. `src/fixture.test.ts` is the list of
+  invariants that replacement has to keep — nine cells, three personas x three models, real spread,
+  `mode: "mock"`, `settled: false`, nothing shaped like a private key.
+- Paying modes currently throw `UnavailableError` from `analyze()`. Ticket 04 replaces that throw
+  with the outbound leg; the "never fall back to mock" tests should keep passing untouched.
+- `npm audit` reports 2 moderate advisories in `@hono/node-server`, reachable only through the MCP
+  SDK's HTTP transport. This bridge is stdio-only, so nothing is exposed.

@@ -1,0 +1,40 @@
+{
+  "name": "ask-trivium",
+  "version": "0.1.0",
+  "description": "A payment-aware MCP bridge to the Ask Trivium dispute-analysis panel. Runs as a local stdio MCP server, or as a plain CLI.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "ask-trivium": "./dist/bin.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jaybuidl/ask-trivium-hackathon.git"
+  },
+  "homepage": "https://github.com/jaybuidl/ask-trivium-hackathon#readme",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "dev": "tsx src/bin.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "incur": "^0.4.19",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.10"
+  }
+}
