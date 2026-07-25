@@ -101,10 +101,11 @@ const PanelResponse = Verdict.extend({
 });
 ```
 
-Persona ids are real names on the wire, decided (ADR-0009): "the strict lens scored 31, the
-consumer-aware lens scored 78" is the product's most legible feature, and the naming scheme is
-guessable in one probing round anyway. The prompt text behind those names is a different matter and
-never crosses — see `AGENTS.md`.
+Persona ids carry their real names on the wire, decided (ADR-0009). Attributing each score to a
+named perspective is what makes a panel readable rather than a column of nine numbers, and it is the
+part a caller can act on. Render the name with the score; do not collapse the nine cells into
+anonymous rows. The prompt text behind those names is a separate matter and never crosses — see
+`AGENTS.md`.
 
 All nine `reasoning` strings ship unsanitised (ADR-0010). The bridge must render them verbatim: no
 truncation of the string it stores, no rewriting, no "cleaning up". Visual truncation for a narrow
