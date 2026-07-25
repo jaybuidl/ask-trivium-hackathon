@@ -2,6 +2,19 @@
   "name": "ask-trivium",
   "version": "0.1.0",
   "description": "A payment-aware MCP bridge to the Ask Trivium dispute-analysis panel. Runs as a local stdio MCP server, or as a plain CLI.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "x402",
+    "kleros",
+    "arbitration",
+    "dispute-resolution",
+    "agent",
+    "cli",
+    "usdc",
+    "base"
+  ],
+  "author": "jaybuidl <jaybuidl@pm.me>",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -12,17 +25,29 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
-    "dist"
+    "dist",
+    "src",
+    "!src/**/*.test.ts"
   ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jaybuidl/ask-trivium-hackathon.git"
   },
   "homepage": "https://github.com/jaybuidl/ask-trivium-hackathon#readme",
+  "bugs": {
+    "url": "https://github.com/jaybuidl/ask-trivium-hackathon/issues"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "prepublishOnly": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "rm -rf dist && npm run typecheck && npm test && npm run build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "dev": "tsx src/bin.ts"
