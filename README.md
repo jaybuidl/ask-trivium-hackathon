@@ -85,12 +85,16 @@ ask-trivium analyze "..." "..."          # terminal → rendered panel
 ask-trivium analyze "..." "..." | less   # piped    → structured envelope, no panel
 ask-trivium analyze "..." "..." --panel | less   # piped → rendered panel anyway
 ask-trivium analyze "..." "..." --format json    # terminal → JSON, no panel
+ask-trivium analyze "..." "..." --json           # the same, in short
 ```
 
 That is deliberate — an agent shelling out to this CLI should get parseable data without being told
 to ask. But it surprises everyone the first time, so `--panel` and `--format json` let you name the
-form you want and stop guessing. If you pass both, `--format` wins: it names an exact encoding,
+form you want and stop guessing. If you pass both, the format wins: it names an exact encoding,
 where `--panel` only says a person is reading.
+
+Other machine formats are available through `--format` (`toon`, `yaml`, `md`, `jsonl`), and `--json`
+is a shorthand for `--format json`. Run `ask-trivium analyze --help` for the full list.
 
 **Don't use `npm run` for this.** `npm run dev analyze "..." --mode mock` fails inside npm itself
 with `EUNKNOWNCONFIG: Unknown cli flag: --mode`, because `npm run` eats flags before your program

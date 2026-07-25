@@ -80,7 +80,7 @@ cli.command('analyze', {
       .describe(
         'Print the rendered panel even when output is piped or redirected. Without it, a ' +
           'non-terminal stdout is assumed to be an agent and gets the structured envelope ' +
-          'instead. An explicit --format wins over this.',
+          'instead. An explicit --format or --json wins over this.',
       ),
   }),
   output: PanelResponse,
@@ -135,6 +135,10 @@ cli.command('analyze', {
       // "I am a human", so `--format` wins the contradiction — the same precedence incur itself
       // uses when an explicit `--format` overrides an attached terminal. Silently dropping either
       // half of `--panel --format json` would be worse; this at least drops the vaguer one.
+      //
+      // `formatExplicit` rather than a check on `--format`, because incur accepts `--json` as an
+      // undocumented alias for `--format json` and sets this for both. Testing the flag by name
+      // would let `--panel --json` through with the panel winning, which is the same silent drop.
       if (c.options.panel && !c.formatExplicit) {
         await writeFlushed(rendered)
         process.exit(0)

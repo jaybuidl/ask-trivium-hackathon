@@ -116,6 +116,21 @@ describe('naming both output forms at once', () => {
     expect(JSON.parse(stdout)).toMatchObject({ mode: 'mock', analysesCompleted: 9 })
     expect(stdout).not.toMatch(/VERDICT/)
   }, 30_000)
+
+  it('applies that precedence to --json too, in either order', async () => {
+    // `--json` is an undocumented incur alias for `--format json` — absent from --help, but it sets
+    // the same `formatExplicit` the precedence above keys on. Pinned because the alias is the
+    // shorter thing a caller reaches for, and because incur could drop it without telling us.
+    for (const args of [
+      ['--panel', '--json'],
+      ['--json', '--panel'],
+    ]) {
+      const { stdout, code } = await run(['analyze', ...dispute, ...args])
+      expect(code).toBe(0)
+      expect(JSON.parse(stdout)).toMatchObject({ mode: 'mock' })
+      expect(stdout).not.toMatch(/VERDICT/)
+    }
+  }, 30_000)
 })
 
 describe('the help text a cold reader copies from', () => {
