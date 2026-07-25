@@ -24,7 +24,7 @@ side's box is empty, you are about to build against a superseded contract.
 
 | rev | change | CLI | backend |
 |-----|--------------------------------------------------------------------|------------|------------|
-| 3 | §5 trap (c): which side of the boundary it actually binds | ✅ `51ac102` | ⬜ |
+| 3 | §5 trap (c): which side of the boundary it actually binds | ✅ `51ac102` | ✅ `27701d4` |
 | 2 | Ticket 02 — `detail` removed, one response shape (§2); §4 branches on `mode` first; §1 `mode` optional at the tool boundary | ✅ `cded448` | ✅ `f57d7a9` |
 | 1 | The contract as first written down | ✅ `de521d9` | ✅ `293fb0c` |
 
