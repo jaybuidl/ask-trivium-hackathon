@@ -230,10 +230,35 @@ and settlement then fails. Set it well above 180, and verify it rather than assu
 `amount`, and CAIP-2 `eip155:8453`. Confirm the facilitator speaks v2 via its `GET /supported`
 before wiring anything.
 
-**(c) zod 3 vs zod 4.** `@x402/core` and `@x402/mcp` pin `zod: ^3.24.2`. If this repo is on zod 4,
-both will install nested and it will probably work — but zod 3 and zod 4 schema objects are not
-interchangeable, so **never hand a zod-4 schema to anything under `@x402/*`**. Budget an hour if
-this goes wrong at 3am.
+**(c) zod 3 vs zod 4 — and this one binds the two sides differently.** `@x402/core` and `@x402/mcp`
+pin `zod: ^3.24.2`. zod 3 and zod 4 schema objects are not interchangeable, so **never hand a zod-4
+schema to anything under `@x402/*`**.
+
+Probed against the published packages (ticket 02), three things this is *not*:
+
+- **Not a resolution conflict.** `zod` is a regular dependency of `@x402/*`, not a peer. npm nests
+  it — zod 3.25.76 under each x402 package, the host's zod 4 at the root, side by side and quiet.
+  No `overrides`, no `resolutions`. Do not "fix" it.
+- **Not classic zod 3.** `zod@3.25.76` is the transitional release shipping *both* the v3 and v4
+  APIs (a `zod/v4` subpath), so do not expect zod-3 internals.
+- **Not, on the bridge side, a boundary that is ever crossed.** zod appears nowhere in
+  `@x402/mcp`'s public signatures — one doc-comment, nothing else.
+  `wrapMCPClientWithPayment(mcpClient, paymentClient, options)` and `createx402MCPClient(config)`
+  take an MCP SDK `Client` and an `x402Client`. The bridge passes plain JSON objects; x402's zod
+  parses its own payment payloads, never the caller's schemas.
+
+**Which side this binds.** The API that takes zod schemas is `createPaymentWrapper(resourceServer,
+config)` — the *server-side* helper, documented as `mcpServer.tool("search", "...", { query:
+z.string() }, ...)`. That is the resource server, which is the **backend's** job; §5 above says the
+bridge uses the client-side wrapper. So this trap is live for the backend's copy of this contract
+and inert for the CLI's. **In the CLI repo, reaching for `createPaymentWrapper` is a boundary alarm
+— it means backend code is being written in the wrong repo — not a dependency puzzle to solve.**
+
+The residual hazard is shared, and it is about the MCP SDK rather than zod: if a future `@x402`
+release moves its `@modelcontextprotocol/sdk` pin outside the host's range, the SDK forks into two
+copies and `Client` becomes two nominally distinct types, which surfaces as baffling structural
+type errors. Today they dedupe (x402 wants `^1.12.1`). Assert a single SDK copy resolves rather
+than discovering this at 3am.
 
 **(d) The recovering payment hook double-charges.** See §6 — it is a rule, not a caution.
 
