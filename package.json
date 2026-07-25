@@ -10,9 +10,7 @@
     "arbitration",
     "dispute-resolution",
     "agent",
-    "cli",
-    "usdc",
-    "base"
+    "cli"
   ],
   "author": "jaybuidl <jaybuidl@pm.me>",
   "license": "MIT",
