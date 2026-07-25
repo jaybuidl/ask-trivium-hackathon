@@ -43,23 +43,17 @@ land within three points of each other tell you it is not.
 
 ## Quickstart
 
-**Requirements:** Node.js 22 or newer. Nothing else — no wallet, no funds, no network.
+**Requirements:** Node.js 22 or newer. Nothing else — no wallet, no funds, no signup, no checkout.
 
 ```bash
-git clone https://github.com/jaybuidl/ask-trivium-hackathon.git
-cd ask-trivium-hackathon
-npm install
-npm run build
+npx ask-trivium analyze "Refund refused on a faulty laptop" \
+  "Bought on 3 March, screen failed in May, retailer blamed accidental damage."
 ```
 
-Then run it:
+That is the whole quickstart. You should see a full nine-cell panel.
 
-```bash
-node dist/bin.js analyze "Refund refused on a faulty laptop" \
-  "Bought on 3 March, screen failed in May, retailer blamed accidental damage." --panel
-```
-
-You should see a full nine-cell panel. That is the whole quickstart.
+To keep it around, install it with `npm install -g ask-trivium`. The examples below use the short
+`ask-trivium` form that gives you; without the global install, prefix each one with `npx`.
 
 > **What you just saw is a canned example.** Mock mode ships a real panel captured from the engine
 > and replays it offline — it is not an analysis of the dispute you typed, and the banner at the top
@@ -76,9 +70,10 @@ pipe them in instead:
 cat complaint.txt | ask-trivium analyze "Refund refused on a faulty laptop"
 ```
 
-**`--panel` is why the output above is readable.** This CLI has two output forms: a rendered panel
-for people, and a structured envelope for machines. It picks between them by asking whether stdout
-is a terminal — so the moment you pipe or redirect, you get the machine form:
+**Piping changes what you get, and it looks like a bug.** This CLI has two output forms: a rendered
+panel for people, and a structured envelope for machines. It picks between them by asking whether
+stdout is a terminal — which is why the quickstart above renders, and why the moment you pipe or
+redirect, you get the machine form instead:
 
 ```bash
 ask-trivium analyze "..." "..."          # terminal → rendered panel
@@ -96,24 +91,25 @@ where `--panel` only says a person is reading.
 Other machine formats are available through `--format` (`toon`, `yaml`, `md`, `jsonl`), and `--json`
 is a shorthand for `--format json`. Run `ask-trivium analyze --help` for the full list.
 
-**Don't use `npm run` for this.** `npm run dev analyze "..." --mode mock` fails inside npm itself
-with `EUNKNOWNCONFIG: Unknown cli flag: --mode`, because `npm run` eats flags before your program
-sees them. If you want the TypeScript sources without a build step, `npx tsx src/bin.ts analyze ...`
-works, or insert `--`: `npm run dev -- analyze "..." --mode mock`.
+**In a checkout, don't reach for `npm run`.** `npm run dev analyze "..." --mode mock` fails inside
+npm itself with `EUNKNOWNCONFIG: Unknown cli flag: --mode`, because `npm run` eats flags before your
+program sees them. Insert `--` (`npm run dev -- analyze "..." --mode mock`), or skip npm entirely
+with `npx tsx src/bin.ts analyze ...`.
 
-### Installing it as a command
+### Running it from a checkout
 
-To get `ask-trivium` on your `PATH`, from the repo root after `npm run build`:
+If you want to read or change the code rather than just use it:
 
 ```bash
-npm link                 # or: npm install -g .
-ask-trivium analyze "Refund refused" "Screen failed after two months."
+git clone https://github.com/jaybuidl/ask-trivium-hackathon.git
+cd ask-trivium-hackathon
+npm install
+npm run build
+node dist/bin.js analyze "Refund refused" "Screen failed after two months."
 ```
 
-Every example below uses the short `ask-trivium` form. Without this step, substitute
-`node dist/bin.js`.
-
-A no-checkout install (`npx ask-trivium ...`) is not available yet — see [Status](#status).
+`npm link` from the repo root puts your build on `PATH` as `ask-trivium`, shadowing any published
+copy.
 
 ---
 
@@ -125,19 +121,22 @@ The same binary is an MCP server. Add it to any MCP-capable agent:
 {
   "mcpServers": {
     "ask-trivium": {
-      "command": "node",
-      "args": ["/absolute/path/to/ask-trivium-hackathon/dist/bin.js", "--mcp"],
+      "command": "npx",
+      "args": ["-y", "ask-trivium", "--mcp"],
       "env": { "ASK_TRIVIUM_MODE": "mock" }
     }
   }
 }
 ```
 
-With `npm link` done, `"command": "ask-trivium", "args": ["--mcp"]` works too. For Claude Code:
+For Claude Code:
 
 ```bash
-claude mcp add ask-trivium --env ASK_TRIVIUM_MODE=mock -- ask-trivium --mcp
+claude mcp add ask-trivium --env ASK_TRIVIUM_MODE=mock -- npx -y ask-trivium --mcp
 ```
+
+If you installed it globally, `"command": "ask-trivium", "args": ["--mcp"]` avoids the npx lookup on
+every start. From a checkout, use `"command": "node"` with an absolute path to `dist/bin.js`.
 
 The server exposes one tool, `analyze_dispute`, which returns both a rendered panel (for the agent
 to show you) and the structured payload (for the agent to reason over). Ask your agent something
@@ -219,10 +218,10 @@ This is a hackathon build, and honesty about what runs matters more than a tidy 
 - ✅ **Mock mode works end to end**, as a CLI and as an MCP server, offline.
 - ✅ **The MCP surface is real** — one tool, published input and output schemas, rendered and
   structured output on every call.
+- ✅ **Published to npm**, so the quickstart needs no checkout and no build.
 - 🚧 **`testnet` and `mainnet` are not wired up yet.** They fail with a clear error naming `mock` as
   the working path. The outbound leg to the backend, the x402 payment client, and wallet
   configuration land next; funding instructions arrive with them.
-- 🚧 **Not published to npm yet**, so installation needs a checkout for now.
 
 ---
 

@@ -27,7 +27,7 @@ costs. Do not block the mock quickstart on that.
 - [x] A reader who has never seen the repo reaches a rendered panel in mock mode from the README
       alone
 - [x] The quickstart is verified on a clean environment, not the development machine
-- [ ] Installing and running requires no repo checkout — it works from the published package
+- [x] Installing and running requires no repo checkout — it works from the published package
 - [x] Configuring an agent to use the CLI as an MCP server is documented and tested
 - [ ] The paid path, including funding, is documented once 06 lands
 - [x] Nothing in the README reveals anything on `docs/wire-contract.md` §6
@@ -92,9 +92,17 @@ Tests live in `src/cli.test.ts` (the traps, driven as real subprocesses) and `sr
 (the two commands the README actually hands a stranger, driven against `dist/bin.js` after a build —
 everything else drives `src/bin.ts` through tsx, which nobody following the README executes).
 
-**Still open: the no-checkout install.** `ask-trivium` is not published to npm, so the README's
-quickstart is a `git clone`. `npx github:jaybuidl/ask-trivium-hackathon` is not a substitute: npm 12
-disables git-source installs by default (`EALLOWGIT`) *and* blocks lifecycle scripts, so a `prepare`
-build would not run and the package would install with no `dist/`. `prepublishOnly` is wired up so a
-publish builds cleanly whenever that call is made; until then the README says plainly that the
-no-checkout path does not exist yet rather than documenting a command that fails.
+**The no-checkout install closed when `ask-trivium@0.1.0` went to npm.** The quickstart is now a
+single `npx ask-trivium analyze ...` — no clone, no build, no wallet — and it is verified against
+the real registry from a clean `HOME`, not from a local tarball. The MCP registration is documented
+as `npx -y ask-trivium --mcp` and was driven end to end from a registry install.
+
+Worth recording, because it was nearly documented as a working path: `npx
+github:jaybuidl/ask-trivium-hackathon` is **not** a substitute for publishing. npm 12 disables
+git-source installs by default (`EALLOWGIT`) *and* blocks lifecycle scripts, so a `prepare` build
+would not run and the package would install with no `dist/`.
+
+Packaging fixed on the way out: the shipped sourcemaps pointed at `../src/*.ts` while `files` shipped
+only `dist`, so they resolved to nothing in a consumer's `node_modules`; `src` now ships minus tests.
+`exports` gates deep imports, and `prepublishOnly` cleans `dist` and runs typecheck and tests rather
+than only building.
