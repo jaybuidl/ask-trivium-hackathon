@@ -1,0 +1,3 @@
+# Local-machine Claude Code state
+.claude/settings.local.json
+skills-lock.json
