@@ -6,7 +6,12 @@ agent-to-bridge over stdio, bridge-to-backend over HTTP — proven end to end ag
 
 Still free: no payment, no wallet. The backend is serving canned data at this point.
 
-**Blocked by:** 02, and the backend URL, which arrives once the backend's stub is deployed.
+**Blocked by:** nothing — 02 is resolved and the backend URL has arrived.
+
+**`https://ask-trivium-mcp.fly.dev/mcp`** — see `docs/backend-endpoint.md`, which also covers what
+is behind it (a stub serving canned data), why the binding timeout is the client's and not the
+host's, and the diagnostic tool for proving progress crosses both legs while the stub still answers
+instantly.
 
 **Status:** ready-for-agent
 
