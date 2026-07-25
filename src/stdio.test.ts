@@ -61,6 +61,35 @@ describe('the bridge as a spawned stdio subprocess', () => {
   }, 30_000)
 
   it('refuses to start at all when the registration environment is unreadable', async () => {
-    await expect(spawnBridge({ ASK_TRIVIUM_MODE: 'production' })).rejects.toThrow()
+    const transport = new StdioClientTransport({
+      command: resolve(root, 'node_modules/.bin/tsx'),
+      args: [resolve(root, 'src/bin.ts'), '--mcp'],
+      cwd: root,
+      env: { PATH: process.env['PATH'] ?? '', ASK_TRIVIUM_MODE: 'production' },
+      // 'pipe', not the default 'inherit'. The bridge is supposed to complain here, and letting it
+      // complain onto the test runner's stderr makes a green suite read as a broken one — which is
+      // the same "looks like a bug, isn't" failure the cold-start traps are about.
+      stderr: 'pipe',
+    })
+
+    let stderr = ''
+    transport.stderr?.on('data', (chunk) => {
+      stderr += String(chunk)
+    })
+    const drained = new Promise<void>((done) => {
+      if (!transport.stderr) return done()
+      transport.stderr.on('close', () => done())
+      transport.stderr.on('end', () => done())
+    })
+
+    const client = new Client({ name: 'stdio-test-agent', version: '0' })
+    await expect(client.connect(transport)).rejects.toThrow()
+
+    // The refusal has to be the *right* refusal. Asserting only that connect rejects would pass for
+    // a missing binary or a syntax error, which is most of what could go wrong here.
+    await Promise.race([drained, new Promise((r) => setTimeout(r, 5_000))])
+    expect(stderr).toMatch(/ASK_TRIVIUM_MODE/)
+    expect(stderr).toMatch(/"production"/)
+    expect(stderr).toMatch(/mock, testnet, mainnet/)
   }, 30_000)
 })
