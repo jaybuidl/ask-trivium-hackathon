@@ -5,7 +5,7 @@ by following the README, without asking anyone a question.
 
 **Blocked by:** 02.
 
-**Status:** ready-for-agent
+**Status:** in-review
 
 ## Notes
 
@@ -24,14 +24,14 @@ is silent: it always works for the person who wrote it.
 Extend it with the paid path once 06 lands, including where funds come from and what a $1 call
 costs. Do not block the mock quickstart on that.
 
-- [ ] A reader who has never seen the repo reaches a rendered panel in mock mode from the README
+- [x] A reader who has never seen the repo reaches a rendered panel in mock mode from the README
       alone
-- [ ] The quickstart is verified on a clean environment, not the development machine
+- [x] The quickstart is verified on a clean environment, not the development machine
 - [ ] Installing and running requires no repo checkout — it works from the published package
-- [ ] Configuring an agent to use the CLI as an MCP server is documented and tested
+- [x] Configuring an agent to use the CLI as an MCP server is documented and tested
 - [ ] The paid path, including funding, is documented once 06 lands
-- [ ] Nothing in the README reveals anything on `docs/wire-contract.md` §6
-- [ ] The four cold-start traps found in 02 (below) are each either documented or designed out
+- [x] Nothing in the README reveals anything on `docs/wire-contract.md` §6
+- [x] The four cold-start traps found in 02 (below) are each either documented or designed out
 
 ## Comments
 
@@ -66,3 +66,35 @@ were hit:
 
 Trap 3 is the one to think hardest about — it is the only one that is a *design* question rather
 than a documentation gap, and documenting a surprise is the weaker fix.
+
+### How the four were closed, and the one criterion still open
+
+Trap 3 was designed out rather than documented. The CLI had **two output forms and only one
+explicit selector**: `--format json` could force the machine form, but the human form could only be
+reached by having a terminal attached. `--panel` is the missing half — it renders the panel through
+a pipe or a redirect. `--format` wins when both are given, matching the precedence incur already
+uses when an explicit `--format` overrides an attached terminal; the alternative is silently
+discarding half of what the caller asked for. The behaviour is documented next to the first example
+as the ticket asked, but the surprise is now escapable rather than merely explained.
+
+Traps 1, 2 and 4 are documented; 4 was verified rather than assumed — a misspelled `--mode` and a
+misspelled `ASK_TRIVIUM_MODE` both name all three modes, and both are pinned by tests.
+
+**A fifth trap turned up while writing this, in the CLI's own `--help`.** incur does not quote
+multi-word values in generated examples, so the first example read `ask-trivium analyze Refund
+refused on a faulty laptop --mode mock`. Copy that and it analyses a dispute titled "Refund" with
+the content "refused", silently dropping the rest — mock hides it behind a canned panel, and
+mainnet would spend a dollar on it. Worse, the leading example was title-only, which fails outright
+under trap 2. Both examples are now quoted and complete, and a test asserts every generated example
+stays copy-pasteable.
+
+Tests live in `src/cli.test.ts` (the traps, driven as real subprocesses) and `src/readme.test.ts`
+(the two commands the README actually hands a stranger, driven against `dist/bin.js` after a build —
+everything else drives `src/bin.ts` through tsx, which nobody following the README executes).
+
+**Still open: the no-checkout install.** `ask-trivium` is not published to npm, so the README's
+quickstart is a `git clone`. `npx github:jaybuidl/ask-trivium-hackathon` is not a substitute: npm 12
+disables git-source installs by default (`EALLOWGIT`) *and* blocks lifecycle scripts, so a `prepare`
+build would not run and the package would install with no `dist/`. `prepublishOnly` is wired up so a
+publish builds cleanly whenever that call is made; until then the README says plainly that the
+no-checkout path does not exist yet rather than documenting a command that fails.

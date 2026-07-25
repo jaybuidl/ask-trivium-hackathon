@@ -22,6 +22,7 @@
   "homepage": "https://github.com/jaybuidl/ask-trivium-hackathon#readme",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "dev": "tsx src/bin.ts"

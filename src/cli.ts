@@ -18,6 +18,32 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString('utf8').trim()
 }
 
+/**
+ * Write to stdout and resolve once the bytes have actually left the process.
+ *
+ * A pipe does not accept a large write synchronously, and `process.exit` does not drain what is
+ * still buffered — exiting straight after a plain `write` truncates the panel at whatever the pipe
+ * happened to swallow. The callback form is what makes the early exit below safe.
+ */
+function writeFlushed(text: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    process.stdout.write(text, (error) => (error ? reject(error) : resolve()))
+  })
+}
+
+/**
+ * The dispute shown in `--help`, quoted and complete because these lines get copied verbatim.
+ *
+ * An unquoted `analyze Refund refused on a faulty laptop` splits into a dispute titled "Refund"
+ * with the content "refused" and silently drops the rest — mock hides that behind a canned panel,
+ * and mainnet spends a dollar analysing it. A title-only example fails outright, because content is
+ * required whether it comes from argv or from stdin.
+ */
+const EXAMPLE_DISPUTE = {
+  title: '"Refund refused on a faulty laptop"',
+  content: '"Bought on 3 March, screen failed in May, retailer blamed accidental damage."',
+} as const
+
 export const cli = Cli.create('ask-trivium', {
   version: '0.1.0',
   description:
@@ -48,6 +74,14 @@ cli.command('analyze', {
       .uuid()
       .optional()
       .describe('UUID for safely retrying a paid call after a dropped connection.'),
+    panel: z
+      .boolean()
+      .optional()
+      .describe(
+        'Print the rendered panel even when output is piped or redirected. Without it, a ' +
+          'non-terminal stdout is assumed to be an agent and gets the structured envelope ' +
+          'instead. An explicit --format wins over this.',
+      ),
   }),
   output: PanelResponse,
   // The panel is rendered for humans by hand below; letting incur also dump the payload would
@@ -55,19 +89,19 @@ cli.command('analyze', {
   outputPolicy: 'agent-only',
   usage: [
     { args: { title: true, content: true } },
-    { args: { title: true }, options: { mode: true } },
+    { args: { title: true, content: true }, options: { mode: true } },
     { prefix: 'cat complaint.txt |', args: { title: true } },
   ],
   examples: [
     {
-      args: { title: 'Refund refused on a faulty laptop' },
+      args: EXAMPLE_DISPUTE,
       options: { mode: 'mock' },
       description: 'See a canned example panel — free, offline, no backend',
     },
     {
-      args: { title: 'Refund refused on a faulty laptop', content: 'Bought on 3 March...' },
+      args: EXAMPLE_DISPUTE,
       options: { mode: 'mainnet' },
-      description: 'Run a real analysis and pay $1 USDC',
+      description: 'Run a real analysis of your own dispute and pay $1 USDC',
     },
   ],
   hint:
@@ -90,7 +124,23 @@ cli.command('analyze', {
         mode: c.options.mode,
         idempotency_key: c.options.idempotencyKey,
       })
-      if (!c.agent) process.stdout.write(`${renderPanel(result)}\n`)
+      const rendered = `${renderPanel(result)}\n`
+
+      // `--panel` is the explicit half of a selector that is otherwise invisible: the machine form
+      // can be forced with `--format json`, and without this the human form could only be reached
+      // by having a terminal attached. Exit here rather than falling through, so `--panel | less`
+      // shows the panel alone and not the panel followed by the envelope.
+      //
+      // A caller who names a machine format outright has asked for something more specific than
+      // "I am a human", so `--format` wins the contradiction — the same precedence incur itself
+      // uses when an explicit `--format` overrides an attached terminal. Silently dropping either
+      // half of `--panel --format json` would be worse; this at least drops the vaguer one.
+      if (c.options.panel && !c.formatExplicit) {
+        await writeFlushed(rendered)
+        process.exit(0)
+      }
+
+      if (!c.agent) process.stdout.write(rendered)
       return c.ok(result)
     } catch (error) {
       return c.error({
