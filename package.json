@@ -1,6 +1,6 @@
 {
   "name": "ask-trivium",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A payment-aware MCP bridge to the Ask Trivium dispute-analysis panel. Runs as a local stdio MCP server, or as a plain CLI.",
   "keywords": [
     "mcp",
