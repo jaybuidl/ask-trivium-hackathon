@@ -14,7 +14,7 @@ Everything you need is in this file. It does not point into the closed repo for 
 
 ---
 
-<!-- contract-rev: 4 -->
+<!-- contract-rev: 5 -->
 
 ## Mirror state
 
@@ -60,7 +60,10 @@ const AnalyzeDisputeInput = z.object({
   mode: z.enum(["mock", "testnet", "mainnet"]),
 
   // Paid API: lets a client safely retry after a dropped connection without paying
-  // twice. The server returns the cached result for a repeated key. See §7 item 2.
+  // twice. DECIDED (ticket 06): the CALLER generates it, once, before its first attempt,
+  // and resends it unchanged. It cannot be derived from the payment nonce — a retry signs
+  // a fresh authorization, so a derived key would never match. See §7 item 2, including
+  // the note that server-side caching does not ship yet.
   idempotency_key: z.string().uuid().optional(),
 });
 ```
@@ -304,6 +307,21 @@ copies and `Client` becomes two nominally distinct types, which surfaces as baff
 type errors. Today they dedupe (x402 wants `^1.12.1`). Assert a single SDK copy resolves rather
 than discovering this at 3am.
 
+**Measured in ticket 06.** This repo resolves exactly one copy, which is the half that matters —
+the client wrapper is the only x402 signature that names an SDK `Client`. The backend's tree does
+nest a second copy under `@x402/mcp`, and it is harmless there for a reason worth writing down:
+`createPaymentWrapper` returns `MCPToolCallback<TArgs> = (args, extra: unknown) => …`, so no SDK
+type crosses the boundary on the server side at all.
+
+**(e) `x402MCPClient.callTool` cannot be used by this bridge.** Its options are
+`{timeout, signal, resetTimeoutOnProgress}` — no `onprogress`, no `maxTotalTimeout`. The MCP SDK
+looks up a progress handler *before* honouring `resetTimeoutOnProgress` and returns early if there
+is none, so the flag goes inert and a ~111s analysis times out at the base timeout. The convenience
+wrapper would silently undo §3's cadence on precisely the calls the cadence exists for. Use
+`@x402/mcp`'s exported primitives — `MCP_PAYMENT_META_KEY`, the `PaymentRequired` in the `isError`
+result — and keep this repo's own call options. Discovered in ticket 06 by reading the signature,
+not by a timeout at 3am.
+
 **(d) The recovering payment hook double-charges.** See §6 — it is a rule, not a caution.
 
 ### Settlement can fail after the work succeeded
@@ -354,12 +372,17 @@ to the backend's copy.
 1. ~~**Does `detail` survive?**~~ **DECIDED (ticket 02): it does not.** One response shape,
    `PanelResponse`. Rationale in §2; `detail` is removed from §1 and `detail: "full"`'s per-cell
    flags and notes are dropped. The backend's copy needs the same change.
-2. **`idempotency_key`: client-supplied or derived from the payment nonce?** It stays either way:
-   the EIP-3009 nonce prevents replay of *the same* authorization, but a client retrying after a
-   dropped connection signs a fresh one and pays twice, and only an application-level key closes
-   that. The source of the value is unspecified. — ticket 06. Note that §4's "a giveaway is final"
-   rule only has teeth if idempotency caching actually ships; cut the key and a retry is just a new
-   paid run.
+2. ~~**`idempotency_key`: client-supplied or derived from the payment nonce?**~~ **DECIDED (ticket
+   06): client-supplied — and the answer is forced, not chosen.** Derived-from-the-nonce cannot
+   work for the one scenario the key exists to cover. The EIP-3009 nonce prevents replay of *the
+   same* authorization, but a client retrying after a dropped connection signs a **fresh** one with
+   a fresh nonce — so a nonce-derived key would differ between the attempt and its retry and
+   deduplicate nothing. The bridge generates it once, before the first attempt, and reuses it
+   verbatim on the retry. See §1.
+
+   §4's "a giveaway is final" rule keeps its teeth only once idempotency *caching* ships. Ticket 06
+   sends and accepts the key but does **not** deduplicate on it yet, so today a retry is still a
+   new paid run. Known gap, recorded rather than decided.
 3. ~~**Does progress carry incremental scores?**~~ **DECIDED (ticket 05): yes, inside `message`,
    with no new field.** The landed cell's score rides in the sentence that names it. The 7-of-9
    partial-evidence exposure is accepted, not prevented — the caller has already committed to pay
@@ -381,3 +404,16 @@ to the backend's copy.
    payload the same branch has just decided is untrustworthy. From ticket 06 the bridge holds the
    wallet and knows whether *it* paid without asking, which is the information this needs and the
    reason it waits. — **ticket 06**, alongside item 2.
+
+   **DECIDED (ticket 06). Both halves:**
+
+   - **The backend owes a faithful echo.** It takes `mode` straight from the request and must keep
+     doing so. Nothing between the request and the payload may relabel a panel.
+   - **The bridge splits on whether it paid**, which it knows first-hand from having signed the
+     authorization — no field of the payload is consulted, so the circularity is gone. **Paid:**
+     deliver the panel and warn that the tiers disagreed. **Not paid:** reject, exactly as ticket 04
+     wrote it.
+
+   The split is what lets both rules hold at once. ADR-0014's prohibition only ever applied once
+   money had moved, and that is precisely the branch that now delivers; the free branch, where
+   nothing is at stake and a silently relabelled panel would be the worse outcome, keeps refusing.
