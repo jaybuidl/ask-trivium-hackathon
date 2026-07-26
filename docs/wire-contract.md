@@ -1,8 +1,8 @@
 # The wire contract
 
 **Status: partially frozen.** §1–§6 are decided and safe to build against. §7 lists the questions
-still open; each names the ticket that has to decide it, because you cannot write that ticket's code
-without an answer.
+still open — two, both assigned to ticket 06; each names the ticket that has to decide it, because
+you cannot write that ticket's code without an answer.
 
 This is the CLI's copy. The backend holds its own hand-written copy of the same contract —
 deliberately no shared package, because a private dependency would break the open-source build and
@@ -14,7 +14,7 @@ Everything you need is in this file. It does not point into the closed repo for 
 
 ---
 
-<!-- contract-rev: 3 -->
+<!-- contract-rev: 4 -->
 
 ## Mirror state
 
@@ -30,6 +30,11 @@ Rev 2, in two sentences: ticket 02 removed `detail` and made `mode` optional at 
 boundary but required by the time it reaches the backend; the second half of that change was
 recorded only in a commit message, and the backend served the superseded contract for hours until a
 human happened to read that message.
+
+Rev 4, in one sentence: ticket 05 closed §3's two open questions — progress names the cell that
+landed and carries its score, both inside `message` — and, in the change this repo actually had to
+code against, **`progress` is no longer an integer**, because the backend's cadence has to keep it
+rising between cells while `total` stays at nine.
 
 This repo's only obligation under this scheme is bumping the number above whenever §1–§6 change.
 The backend repo carries the rest — it can reach into this one through a symlink; this one must
@@ -159,9 +164,25 @@ Payload:
 { progress: number, total: 9, message: string }
 ```
 
-`message` may name the model and persona of the cell that just landed — that leaks nothing the panel
-already carries, and the terminal naming each voice as it arrives is the most watchable part of the
-demo. Whether progress also carries incremental *scores* is still open; see §7 item 3.
+**`progress` is not an integer, and this is the part to code against.** `total` is nine, and MCP
+requires `progress` to rise with *every* notification — so a cadence emission between cells cannot
+repeat the cell count, and cannot count itself without making `total` a lie. The backend moves it a
+fraction of the way towards the next cell instead: always increasing, never overtaking a cell that
+has not landed. Take `Math.floor(progress)` for the count a human should read. This repo does
+exactly that (`cellCount` in `src/cli.ts`), after `2.3333333333333335/9` turned up in a terminal.
+
+**`message` names the cell that landed, and carries its score** — decided in ticket 05, closing
+§7 item 3. It reads like `"3 of 9 analyses complete — claude-opus-5 / Strict scored 71"`, or
+`"… / Strict did not return"` for a cell that failed. Naming the voice leaks nothing the panel does
+not already carry (ADR-0009), and the terminal filling in live is the most watchable part of the
+demo. The payload gains **no field** for the score: it stays exactly `{ progress, total, message }`,
+which is what made this a decision about wording rather than a change to a frozen shape.
+
+The exposure that question was about — a client disconnecting at 7 of 9 and keeping seven scores it
+would otherwise have paid in full for — is accepted rather than prevented. By the time any cell
+lands the caller has committed to pay, so leaving early buys a worse answer, not a cheaper one.
+Note the string is not a boundary: a determined client can parse the scores out of it, and nothing
+here pretends otherwise.
 
 **Progress is a hard requirement on BOTH legs, not one.** The MCP SDK's default client request
 timeout is 60,000ms — under the p95. Two MCP clients are in play: the bridge's client talking to the
@@ -171,9 +192,10 @@ forward progress upstream**. Configure only its own leg and the agent still time
 the bridge sits there waiting contentedly.
 
 Cadence: the server emits every 5–10s regardless of whether a cell landed, so no gap looks idle to
-an intermediary. Nine cells over 90s is not frequent enough on its own. A hosting proxy's idle
-timeout is the thing most likely to cut a long call — test it empirically before the demo rather
-than trusting a documented number.
+an intermediary. Nine cells over 90s is not frequent enough on its own. The hosting proxy turned
+out not to be the constraint — a silent 240s hold survived it — but the cadence stays, because the
+MCP client's own 60s default is under the p95 and that is the timeout progress has to keep
+resetting.
 
 ## 4. Errors, and when a call is free
 
@@ -325,8 +347,9 @@ wallet management, output rendering, this contract's schemas, and the embedded m
 
 ## 7. Still open
 
-Three questions remain. Each is assigned to the ticket that cannot be written without it — decide it
-there, record the decision in this file, and mirror it to the backend's copy.
+Two questions remain — items 2 and 4, both assigned to ticket 06. Each is assigned to the ticket
+that cannot be written without it: decide it there, record the decision in this file, and mirror it
+to the backend's copy.
 
 1. ~~**Does `detail` survive?**~~ **DECIDED (ticket 02): it does not.** One response shape,
    `PanelResponse`. Rationale in §2; `detail` is removed from §1 and `detail: "full"`'s per-cell
@@ -337,11 +360,10 @@ there, record the decision in this file, and mirror it to the backend's copy.
    that. The source of the value is unspecified. — ticket 06. Note that §4's "a giveaway is final"
    rule only has teeth if idempotency caching actually ships; cut the key and a retry is just a new
    paid run.
-3. **Does progress carry incremental scores?** Better demo — the terminal fills in live — but it
-   streams the evidence incrementally, so a client can disconnect at 7/9 holding partial data it
-   would otherwise have paid in full for. Probably fine; decide it rather than discover it. —
-   ticket 05 on the server side, but the bridge renders it, so agree it before building the
-   renderer.
+3. ~~**Does progress carry incremental scores?**~~ **DECIDED (ticket 05): yes, inside `message`,
+   with no new field.** The landed cell's score rides in the sentence that names it. The 7-of-9
+   partial-evidence exposure is accepted, not prevented — the caller has already committed to pay
+   by the time any cell lands. Rationale and wording in §3.
 4. **What does the bridge do with a panel whose `mode` disagrees with the mode the call ran in?**
    Nothing in §1–§6 obliges the backend to echo `mode` faithfully. It does today, and ticket 04
    started relying on it: the bridge rejects a mismatch outright rather than relabelling the panel,

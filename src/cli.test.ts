@@ -13,6 +13,7 @@ import { spawn } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { cellCount } from './cli.js'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -154,4 +155,20 @@ describe('the help text a cold reader copies from', () => {
       expect(words.trim()).toBe('')
     }
   }, 30_000)
+})
+
+/**
+ * The one piece of this module worth testing in-process rather than through a subprocess: the
+ * progress line only renders when stderr is a TTY, and a spawned test process never has one.
+ */
+describe('the progress count a human watches', () => {
+  it('shows whole analyses, not the cadence between them', () => {
+    // §3 fixes `total` at nine while requiring `progress` to rise with *every* notification, so
+    // the backend moves a fraction of the way towards the next cell when it emits on a cadence
+    // rather than because a cell landed. Printed raw that reads `2.3333333333333335/9` at the
+    // exact moment a judge is watching the terminal.
+    expect(cellCount(2.3333333333333335)).toBe(2)
+    expect(cellCount(0.5)).toBe(0)
+    expect(cellCount(9)).toBe(9)
+  })
 })

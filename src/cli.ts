@@ -58,9 +58,22 @@ const EXAMPLE_DISPUTE = {
 function terminalProgress(): ProgressListener | undefined {
   if (!process.stderr.isTTY) return undefined
   return ({ progress, total, message }) => {
-    const count = total === undefined ? `${progress}` : `${progress}/${total}`
+    const count = total === undefined ? `${cellCount(progress)}` : `${cellCount(progress)}/${total}`
     process.stderr.write(`  ${count}  ${message ?? 'analysing'}\n`)
   }
+}
+
+/**
+ * How many cells have landed, from a `progress` that may not be whole.
+ *
+ * §3 fixes `total` at nine while requiring `progress` to rise with *every* notification, and the
+ * backend emits on a cadence as well as per cell — so a notification during a quiet stretch moves
+ * a fraction of the way towards the next cell rather than repeating the last one. Printed raw that
+ * reads `2.3333333333333335/9`. The whole part is the honest number: two analyses are in, and the
+ * fraction is the server saying it is still working, which the message says in words anyway.
+ */
+export function cellCount(progress: number): number {
+  return Math.floor(progress)
 }
 
 export const cli = Cli.create('ask-trivium', {

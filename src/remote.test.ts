@@ -125,6 +125,34 @@ describe('a paying call across both legs', () => {
     expect(seen[8]?.message).toContain('cell 9')
   }, 30_000)
 
+  /**
+   * The backend emits on a cadence as well as per cell, and §3 fixes `total` at nine while MCP
+   * requires `progress` to rise with every notification — so a heartbeat between cells carries a
+   * fractional value. Nothing in the bridge may round or truncate it on the way past: an
+   * intermediary that "tidied" 2.33 to 2 would emit two notifications with the same progress and
+   * breach the spec on behalf of a backend that did not.
+   */
+  it('passes a heartbeat’s fractional progress through untouched', async () => {
+    const withHeartbeats = [
+      { progress: 1, total: PANEL_SIZE, message: '1 of 9 analyses complete — model-a / Strict scored 71' },
+      { progress: 1.3333333333333333, total: PANEL_SIZE, message: '1 of 9 analyses complete — still working' },
+      { progress: 1.5, total: PANEL_SIZE, message: '1 of 9 analyses complete — still working' },
+      { progress: 2, total: PANEL_SIZE, message: '2 of 9 analyses complete — model-b / Strict scored 48' },
+    ]
+    backend = await startFakeBackend({ progress: withHeartbeats })
+    client = await spawnBridge({ [ENDPOINT_ENV_VAR]: backend.url })
+
+    const seen: number[] = []
+    await client.callTool(
+      { name: 'analyze_dispute', arguments: { ...dispute, mode: 'mainnet' } },
+      undefined,
+      { onprogress: (p) => seen.push(p.progress), resetTimeoutOnProgress: true },
+    )
+
+    expect(seen).toEqual(withHeartbeats.map((step) => step.progress))
+    for (let i = 1; i < seen.length; i += 1) expect(seen[i]!).toBeGreaterThan(seen[i - 1]!)
+  }, 30_000)
+
   it('holds a call open longer than the agent’s own timeout while progress flows', async () => {
     // The failure §3 is about, in miniature: a call slower than the client's timeout survives only
     // because notifications keep resetting it. 1.2s of work against a 500ms window.
