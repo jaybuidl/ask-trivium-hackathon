@@ -86,8 +86,9 @@ export const Verdict = z.object({
   decision: z
     .enum(['user_wins', 'company_wins', 'escalate'])
     .describe(
-      'How the panel predicts Kleros jurors would rule. "escalate" means the panel declines to ' +
-        'auto-resolve and refers the dispute to a jury — a legitimate outcome, not a failure.',
+      'How the panel predicts a neutral adjudicator would rule. "escalate" means the panel ' +
+        'declines to auto-resolve and refers the dispute to a jury — a legitimate outcome, not a ' +
+        'failure.',
     ),
   score: z.number().min(0).max(100).describe('User win probability, 0-100.'),
   agreement: z

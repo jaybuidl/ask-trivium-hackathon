@@ -1,8 +1,8 @@
 # Ask Trivium
 
 A paid analysis service for consumer disputes. A caller submits a dispute; a panel of nine
-independent LLM analyses predicts how Kleros jurors would rule. Sold at $1 USDC per call over x402,
-reached through this open-source CLI, which bridges any MCP agent to a closed backend.
+independent LLM analyses predicts how a neutral adjudicator would rule. Sold at $1 USDC per call
+over x402, reached through this open-source CLI, which bridges any MCP agent to a closed backend.
 
 This repo is the CLI. The engine that produces the analysis is closed and lives elsewhere — see
 `AGENTS.md`.

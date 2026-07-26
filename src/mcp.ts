@@ -21,7 +21,7 @@ import { VERSION } from './version.js'
  * proposition: what it does, what it costs, and which mode is safe to pick unprompted.
  */
 const TOOL_DESCRIPTION = [
-  'Predict how Kleros jurors would rule on a consumer dispute.',
+  'Predict how a neutral adjudicator would rule on a consumer dispute.',
   '',
   'Nine independent LLM analyses — three models across three analytical perspectives (strict,',
   'consumer-aware, precedent-focused) — each score the dispute, and the panel is aggregated into',

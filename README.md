@@ -1,6 +1,6 @@
 # Ask Trivium
 
-**Predict how [Kleros](https://kleros.io) jurors would rule on a consumer dispute — from your
+**Predict how a neutral adjudicator would rule on a consumer dispute — from your
 terminal, or from any MCP agent.**
 
 You describe a dispute. Nine independent LLM analyses — three models, each asked to reason from

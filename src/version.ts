@@ -10,4 +10,4 @@
  * pull it into the build output or need module settings this repo does not otherwise want.
  * `version.test.ts` asserts the two agree instead, which turns the copy into a checked one.
  */
-export const VERSION = '0.1.1'
+export const VERSION = '0.1.2'

@@ -79,7 +79,7 @@ export function cellCount(progress: number): number {
 export const cli = Cli.create('ask-trivium', {
   version: VERSION,
   description:
-    'Predict how Kleros jurors would rule on a consumer dispute, using a panel of nine ' +
+    'Predict how a neutral adjudicator would rule on a consumer dispute, using a panel of nine ' +
     'independent LLM analyses. Also runs as a local MCP server with --mcp.',
 })
 

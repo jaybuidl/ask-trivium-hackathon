@@ -6,8 +6,8 @@ is being built, why it takes the shape it does, and which slice to pick up first
 ## What this is
 
 Ask Trivium sells a $1 dispute analysis. A caller submits a consumer dispute; nine independent LLM
-analyses — three models × three personas — predict how Kleros jurors would rule, and the panel is
-aggregated into one verdict. That engine is closed and lives in another repo.
+analyses — three models × three personas — predict how a neutral adjudicator would rule, and the
+panel is aggregated into one verdict. That engine is closed and lives in another repo.
 
 **This repo is the CLI, and the CLI is the submission.** Not a thin wrapper around an HTTP call: it
 is the piece that makes a paid MCP tool reachable at all.

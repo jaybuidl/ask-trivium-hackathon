@@ -19,6 +19,12 @@
  * they are altered to stay truthful about the run being served rather than the run being quoted.
  * Provenance is checkable in the comment; the wire payload describes only itself.
  *
+ * The `reasoning` strings are quoted model output, so they carry the vocabulary the engine prompted
+ * the models with — including naming the arbitration protocol whose jurors the analysis predicts.
+ * The prose elsewhere in this package describes the analysis neutrally; here it is left exactly as
+ * captured. Neutralising it in place would make this an invention again, which is the one thing the
+ * fixture must not be. The honest route is a prompt change and a fresh capture, not an edit here.
+ *
  * It describes its own dispute, not the caller's. Mock never echoes the submitted title back, which
  * would fake personalisation; the renderer and `mode: "mock"` both say plainly that this is a canned
  * example.
