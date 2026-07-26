@@ -1,5 +1,8 @@
 # Ask Trivium
 
+<img width="1235" height="2054" alt="image" src="https://github.com/user-attachments/assets/842a02ba-b286-40fd-97e9-3b987399444c" />
+
+
 **Predict how a neutral adjudicator would rule on a consumer dispute — from your
 terminal, or from any MCP agent.**
 
