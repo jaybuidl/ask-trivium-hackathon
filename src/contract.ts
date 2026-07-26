@@ -4,6 +4,10 @@
  * Deliberately NOT a shared package with the backend (ADR-0006). The backend holds its own
  * hand-written copy. If this file changes, that one changes by hand, and neither side may change
  * it unilaterally.
+ *
+ * **Changing anything here means bumping the `contract-rev` marker in `docs/wire-contract.md`.**
+ * That marker is the whole signal the backend gets that there is something to carry across; a
+ * change made here and not marked there reaches nobody.
  */
 import { z } from 'zod'
 
