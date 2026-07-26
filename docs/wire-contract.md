@@ -18,27 +18,22 @@ Everything you need is in this file. It does not point into the closed repo for 
 
 ## Mirror state
 
-Two copies, no shared package, so the only thing keeping them together is that someone carries a
-change across. **This table is that record.** Read it before implementing against this file: if your
-side's box is empty, you are about to build against a superseded contract.
+The marker above is the whole mechanism: touch anything in §1–§6 and bump it. A hand-mirrored
+comparison table used to live here instead and drifted within hours of being written — a check that
+drifts is worse than none, because it reads as assurance. It has been replaced by this marker plus
+executable checks that live in the backend's repo (closed; this repo cannot read it, only be read).
 
-| rev | change | CLI | backend |
-|-----|--------------------------------------------------------------------|------------|------------|
-| 3 | §5 trap (c): which side of the boundary it actually binds | ✅ `51ac102` | ✅ `27701d4` |
-| 2 | Ticket 02 — `detail` removed, one response shape (§2); §4 branches on `mode` first; §1 `mode` optional at the tool boundary | ✅ `cded448` | ✅ `f57d7a9` |
-| 1 | The contract as first written down | ✅ `de521d9` | ✅ `293fb0c` |
+**Only the number has to match.** Nothing else in this section needs to be identical to the
+backend's copy — said explicitly, so nobody reintroduces hand-mirrored prose to "help" it along.
 
-**Changing this file means adding a row.** Bump `contract-rev`, tick your own side, leave the other
-empty — the empty box is the whole point, and it is what tells the other side there is something to
-carry. Tick a box only when that side's code actually matches, not when someone has been told.
+Rev 2, in two sentences: ticket 02 removed `detail` and made `mode` optional at this repo's tool
+boundary but required by the time it reaches the backend; the second half of that change was
+recorded only in a commit message, and the backend served the superseded contract for hours until a
+human happened to read that message.
 
-Backend SHAs are from the engine repo's `server/contract.ts`, which is what serves the wire. That
-side also keeps a prose copy; if the two disagree, the executable one is what a caller experiences.
-
-Rev 2 is the case this table exists for. It was recorded only in a commit message saying the backend
-needed the same change — and the backend went on serving the superseded contract until a human
-happened to read that message. A commit message is not a delivery mechanism; an empty box in a file
-both sides must read is.
+This repo's only obligation under this scheme is bumping the number above whenever §1–§6 change.
+The backend repo carries the rest — it can reach into this one through a symlink; this one must
+never reach into it.
 
 ---
 
