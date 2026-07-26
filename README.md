@@ -181,6 +181,34 @@ ASK_TRIVIUM_ENDPOINT=http://localhost:8787/mcp ask-trivium analyze "..." "..." -
 It is checked when the MCP server starts rather than when a dispute arrives, so a typo is reported
 before you have typed anything. Mock ignores it entirely.
 
+### Funding a paying mode
+
+`testnet` and `mainnet` need a wallet. It is read from `ASK_TRIVIUM_PRIVATE_KEY`, and only from
+there — never a flag, because a flag lands in your shell history. The key is read once, on demand,
+kept in memory as an account, and written nowhere.
+
+```bash
+export ASK_TRIVIUM_PRIVATE_KEY=0x...   # the 0x is optional
+ask-trivium analyze "Refund refused on a faulty laptop" \
+  "Screen failed after two months; the seller blames liquid damage." --mode testnet
+```
+
+**The wallet needs USDC and nothing else — no ETH, on either network.** Payment is an EIP-3009
+authorization: this CLI *signs* it, and the facilitator broadcasts the transfer. Gas is never yours
+to pay, so a wallet holding nothing but USDC is fully able to pay.
+
+| Mode | Where the funds come from | Cost per call |
+|---|---|---|
+| `testnet` | Base Sepolia test USDC, free from [Circle's faucet](https://faucet.circle.com) | nothing real |
+| `mainnet` | USDC on Base, bought or bridged like any other | **$1, real money** |
+
+**Start on `testnet`.** It exercises the entire path — the same signing code, the same facilitator,
+the same backend, the same nine analyses — for nothing. That way the first time you spend a real
+dollar is not also the first time your wallet has been used.
+
+With no key set, a paying mode refuses **at startup**, not after nine analyses have already run.
+`mock` never looks for a key at all.
+
 ---
 
 ## What you are actually buying
@@ -238,12 +266,20 @@ This is a hackathon build, and honesty about what runs matters more than a tidy 
 - ✅ **The outbound leg is live.** `--mode testnet` and `--mode mainnet` reach the deployed backend
   over MCP, render through the same renderer as mock, and report progress while the call runs. An
   unreachable backend fails loudly and names `mock`; it never falls back to fixture data.
-- 🚧 **The backend behind those modes is still a stub.** It answers instantly with fixed,
-  contract-shaped data and stamps every free-text field `[CANNED STUB — NO ANALYSIS WAS RUN]`. The
-  wire works; the nine analyses behind it are not switched on yet.
-- 🚧 **Nothing charges yet.** The x402 payment client and wallet configuration land next, so today
-  every mode is free — `mainnet` included, which reports `NOT CHARGED` because nothing was.
-  Funding instructions arrive with payment.
+- ✅ **The nine analyses are real.** The backend runs the engine, not a stub — nine independent
+  analyses across three model families, each streaming progress as it lands. A full panel takes
+  roughly 70–110 seconds, which is why the progress contract exists rather than being a nicety.
+- ✅ **Payment works, with real money.** A `mainnet` call has settled **$1 USDC on Base**:
+  transaction
+  [`0x68651e31…13d88c5`](https://basescan.org/tx/0x68651e3122b89fcb839e8c611e9c04143d68744f85477fdd63705df0213d88c5),
+  block 49126264, nine cells in 67 seconds. See [funding a paying mode](#funding-a-paying-mode) to
+  run one yourself.
+- 🚧 **The settlement-failure path is built but not yet exercised end to end.** The code delivers
+  the panel and marks it `NOT CHARGED` when settlement fails, and that is the behaviour described
+  above — but forcing a real settlement failure needs a fault-injection switch that has not been
+  run against the deployment. It is the one path here that has never executed. Said plainly because
+  a reader deciding whether to trust the not-charged guarantee deserves to know which parts of it
+  have actually happened.
 
 ---
 
@@ -260,7 +296,7 @@ This is a hackathon build, and honesty about what runs matters more than a tidy 
 | `src/fixture.ts` | the captured panel that mock mode replays |
 | `src/errors.ts` | how a failed call explains itself |
 | `docs/wire-contract.md` | the schemas, progress contract, and error behaviour, in full |
-| `docs/backend-endpoint.md` | what is deployed, and what is still a stub |
+| `docs/backend-endpoint.md` | what is deployed behind the paying modes, and what it measures |
 | `CONTEXT.md` | the vocabulary — dispute, cell, panel, verdict, giveaway |
 
 ### Development
