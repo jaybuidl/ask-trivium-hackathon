@@ -1,7 +1,11 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ENDPOINT_ENV_VAR } from './backend.js'
+import { closedEndpoint, startFakeBackend, type FakeBackend } from './backend.testkit.js'
+import { PANEL_SIZE, PanelResponse } from './contract.js'
 import { createServer } from './mcp.js'
+import { renderPanel } from './render.js'
 
 async function connect() {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
@@ -90,7 +94,19 @@ describe('tools/call in mock mode', () => {
   })
 })
 
-describe('tools/call in a paying mode', () => {
+/**
+ * The endpoint is stubbed at a dead address rather than left to default. Since ticket 04 a paying
+ * mode is a real outbound call, so an unstubbed test here would reach the live deployment — making
+ * the suite need a network, and making it pass or fail on someone else's uptime.
+ */
+describe('tools/call in a paying mode with the backend unreachable', () => {
+  beforeEach(async () => {
+    vi.stubEnv(ENDPOINT_ENV_VAR, await closedEndpoint())
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('reports an error rather than serving the fixture', async () => {
     const result = await client.callTool({
       name: 'analyze_dispute',
@@ -109,6 +125,73 @@ describe('tools/call in a paying mode', () => {
     expect(text).toMatch(/mock/)
     expect(text).toMatch(/NOT charged/i)
     expect(text).not.toMatch(/failing screen/)
+  })
+})
+
+describe('tools/call in a paying mode with the backend answering', () => {
+  let backend: FakeBackend
+  beforeEach(async () => {
+    backend = await startFakeBackend({
+      progress: Array.from({ length: PANEL_SIZE }, (_, i) => ({
+        progress: i + 1,
+        total: PANEL_SIZE,
+        message: `cell ${i + 1}`,
+      })),
+    })
+    vi.stubEnv(ENDPOINT_ENV_VAR, backend.url)
+  })
+  afterEach(async () => {
+    vi.unstubAllEnvs()
+    await backend.close()
+  })
+
+  it('serves the remote panel through the same renderer mock uses', async () => {
+    const result = await client.callTool({
+      name: 'analyze_dispute',
+      arguments: { ...dispute, mode: 'mainnet' },
+    })
+    const structured = PanelResponse.parse(result.structuredContent)
+    const text = (result.content as { text: string }[])[0]?.text ?? ''
+
+    // Byte-identical to what the renderer produces for this payload. Anything the remote path
+    // formatted for itself — including the backend's own text, which is discarded — shows up here
+    // as a mismatch, which is the whole point: one renderer or the slice was built wrong.
+    expect(text).toBe(renderPanel(structured))
+    expect(text).not.toContain("the backend's own text rendering")
+    expect(structured.mode).toBe('mainnet')
+  })
+
+  /**
+   * Wire contract §3's second leg. `backend.test.ts` proves the notifications arrive at the bridge;
+   * this proves the bridge passes them on, which is the half that decides whether the *agent*
+   * times out at 60s on a 180s analysis.
+   */
+  it('forwards the backend’s progress on to the agent', async () => {
+    const seen: number[] = []
+    await client.callTool(
+      { name: 'analyze_dispute', arguments: { ...dispute, mode: 'mainnet' } },
+      undefined,
+      { onprogress: (p) => seen.push(p.progress), resetTimeoutOnProgress: true },
+    )
+
+    expect(seen).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
+  })
+
+  it('completes normally for an agent that asked for no progress', async () => {
+    const result = await client.callTool({
+      name: 'analyze_dispute',
+      arguments: { ...dispute, mode: 'mainnet' },
+    })
+    expect(PanelResponse.parse(result.structuredContent).panel).toHaveLength(PANEL_SIZE)
+  })
+
+  it('reports the mode that actually ran, not the one it was asked for by default', async () => {
+    const result = await client.callTool({
+      name: 'analyze_dispute',
+      arguments: { ...dispute, mode: 'testnet' },
+    })
+    expect(PanelResponse.parse(result.structuredContent).mode).toBe('testnet')
+    expect(backend.calls[0]?.mode).toBe('testnet')
   })
 })
 

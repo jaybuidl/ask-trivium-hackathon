@@ -145,7 +145,8 @@ like *"use ask-trivium to analyse this complaint"* and it will find it.
 `ASK_TRIVIUM_MODE` sets the default mode for that registration; a caller can still override it per
 call. **Leave it on `mock` unless you mean to spend money** — an agent that reaches for `mainnet`
 unprompted spends a real dollar. If you set it to anything that isn't a mode, the server refuses to
-start rather than failing later, mid-dispute.
+start rather than failing later, mid-dispute. `ASK_TRIVIUM_ENDPOINT` belongs in the same `env` block
+if you need to point at a different backend, and is checked the same way.
 
 ---
 
@@ -160,10 +161,25 @@ start rather than failing later, mid-dispute.
 Mode is chosen per call (`--mode`, or the `mode` argument to the tool), not per deployment, so one
 installation serves all three. It defaults to `ASK_TRIVIUM_MODE`, and to `mock` when that is unset.
 
+`mock` is served from the panel embedded in this package and never opens a socket. `testnet` and
+`mainnet` cross to the Trivium backend, which is where the analyses actually run.
+
 **Mock is never a fallback.** If a paying mode cannot reach the backend, the call fails loudly and
 tells you to use `mock` — it does not quietly hand you fixture data. Being served a canned panel
 while believing you bought an analysis is the one failure this design refuses to risk, so the
 fallback that would cause it does not exist anywhere in the code.
+
+### Pointing at a different backend
+
+`testnet` and `mainnet` reach `https://ask-trivium-mcp.fly.dev/mcp` by default, so there is nothing
+to configure. `ASK_TRIVIUM_ENDPOINT` overrides it:
+
+```bash
+ASK_TRIVIUM_ENDPOINT=http://localhost:8787/mcp ask-trivium analyze "..." "..." --mode testnet
+```
+
+It is checked when the MCP server starts rather than when a dispute arrives, so a typo is reported
+before you have typed anything. Mock ignores it entirely.
 
 ---
 
@@ -219,9 +235,15 @@ This is a hackathon build, and honesty about what runs matters more than a tidy 
 - ✅ **The MCP surface is real** — one tool, published input and output schemas, rendered and
   structured output on every call.
 - ✅ **Published to npm**, so the quickstart needs no checkout and no build.
-- 🚧 **`testnet` and `mainnet` are not wired up yet.** They fail with a clear error naming `mock` as
-  the working path. The outbound leg to the backend, the x402 payment client, and wallet
-  configuration land next; funding instructions arrive with them.
+- ✅ **The outbound leg is live.** `--mode testnet` and `--mode mainnet` reach the deployed backend
+  over MCP, render through the same renderer as mock, and report progress while the call runs. An
+  unreachable backend fails loudly and names `mock`; it never falls back to fixture data.
+- 🚧 **The backend behind those modes is still a stub.** It answers instantly with fixed,
+  contract-shaped data and stamps every free-text field `[CANNED STUB — NO ANALYSIS WAS RUN]`. The
+  wire works; the nine analyses behind it are not switched on yet.
+- 🚧 **Nothing charges yet.** The x402 payment client and wallet configuration land next, so today
+  every mode is free — `mainnet` included, which reports `NOT CHARGED` because nothing was.
+  Funding instructions arrive with payment.
 
 ---
 
@@ -231,11 +253,14 @@ This is a hackathon build, and honesty about what runs matters more than a tidy 
 |---|---|
 | `src/cli.ts` | the human CLI |
 | `src/mcp.ts` | the stdio MCP server an agent connects to |
+| `src/backend.ts` | the MCP client that calls the Trivium backend |
 | `src/analyze.ts` | mode dispatch — mock is served here, paying modes forward to the backend |
 | `src/render.ts` | terminal rendering of a panel |
 | `src/contract.ts` | the wire schemas, shared by both surfaces |
 | `src/fixture.ts` | the captured panel that mock mode replays |
+| `src/errors.ts` | how a failed call explains itself |
 | `docs/wire-contract.md` | the schemas, progress contract, and error behaviour, in full |
+| `docs/backend-endpoint.md` | what is deployed, and what is still a stub |
 | `CONTEXT.md` | the vocabulary — dispute, cell, panel, verdict, giveaway |
 
 ### Development
@@ -245,12 +270,20 @@ npm install
 npm run typecheck
 npm test          # unit tests, plus the CLI and the MCP server driven as real subprocesses
 npm run build
+
+ASK_TRIVIUM_LIVE=1 npm test   # additionally hit the deployed backend
 ```
 
 The test suite drives the built binary the way an agent and a cold reader actually drive it —
 spawned as a subprocess with piped stdio — because the failures that matter here (a stray byte on
 stdout corrupting the JSON-RPC stream, a truncated panel through a pipe) only appear at a process
 boundary.
+
+`npm test` needs no network. The backend leg is tested against a stand-in MCP server started on the
+loopback, so both legs are exercised over real transports without depending on a deployment being
+up. `ASK_TRIVIUM_LIVE=1` adds the tests that call the real one — worth running before a demo and
+after any change to `docs/wire-contract.md`, since that is what catches the two copies of the
+contract drifting apart.
 
 ## License
 

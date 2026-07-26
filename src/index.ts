@@ -1,11 +1,16 @@
 /** Public surface, for anything importing this package rather than running it. */
+export { analyze, resolveMode, type AnalyzeOptions } from './analyze.js'
 export {
-  analyze,
-  errorMessage,
-  resolveMode,
-  UnavailableError,
-  type AnalyzeOptions,
-} from './analyze.js'
+  callBackend,
+  DEFAULT_ENDPOINT,
+  ENDPOINT_ENV_VAR,
+  resolveEndpoint,
+  type BackendCallOptions,
+  type BackendRequest,
+  type ProgressEvent,
+  type ProgressListener,
+} from './backend.js'
+export { errorMessage, UnavailableError } from './errors.js'
 export {
   AnalyzeDisputeInput,
   Flags,

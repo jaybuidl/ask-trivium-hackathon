@@ -8,7 +8,7 @@
  * notifications carrying `{ progress, total: 9, message }` on both legs (§3). A generated MCP
  * surface gives neither.
  */
-import { errorMessage } from './analyze.js'
+import { errorMessage } from './errors.js'
 import { startStdioServer } from './mcp.js'
 
 if (process.argv.includes('--mcp')) {

@@ -1,5 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { analyze, resolveMode } from './analyze.js'
+import {
+  REMOTE_MARKER,
+  closedEndpoint,
+  startFakeBackend,
+  type FakeBackend,
+} from './backend.testkit.js'
 import { PanelResponse } from './contract.js'
 import { MOCK_DISPUTE_TITLE } from './fixture.js'
 
@@ -119,18 +125,86 @@ describe('analyze input validation', () => {
   })
 })
 
+/**
+ * These predate ticket 04, when a paying mode failed because nothing was wired up. The wire is in
+ * now, so the failure has to be manufactured — an endpoint nothing answers on — but the assertions
+ * are unchanged on purpose. They describe the promise, not the reason it is being kept
+ * (ADR-0012, wire contract §6), and they should go on passing untouched when payment lands too.
+ */
 describe('paying modes never fall back to mock', () => {
+  let endpoint: string
+  beforeAll(async () => {
+    endpoint = await closedEndpoint()
+  })
+
   for (const mode of ['testnet', 'mainnet'] as const) {
     it(`fails hard in ${mode} rather than serving fixture data`, async () => {
-      await expect(analyze({ ...dispute, mode })).rejects.toThrow()
+      await expect(analyze({ ...dispute, mode }, { endpoint })).rejects.toThrow()
     })
 
     it(`names mock as the working path when ${mode} is unavailable`, async () => {
-      await expect(analyze({ ...dispute, mode })).rejects.toThrow(/mock/)
+      await expect(analyze({ ...dispute, mode }, { endpoint })).rejects.toThrow(/mock/)
     })
 
     it(`never leaks the fixture into a ${mode} result`, async () => {
-      await expect(analyze({ ...dispute, mode })).rejects.not.toThrow(/failing screen/)
+      await expect(analyze({ ...dispute, mode }, { endpoint })).rejects.not.toThrow(/failing screen/)
     })
   }
+})
+
+/**
+ * Mode dispatch, from the outside: which source of truth a mode reaches, proven by watching the
+ * backend rather than by reading the code that is supposed to decide.
+ */
+describe('analyze routes each mode to the right source', () => {
+  let backend: FakeBackend
+  beforeEach(async () => {
+    backend = await startFakeBackend()
+  })
+  afterEach(async () => {
+    await backend.close()
+  })
+
+  it('serves a paying mode from the backend, not the fixture', async () => {
+    const result = await analyze({ ...dispute, mode: 'mainnet' }, { endpoint: backend.url })
+    expect(result.rationale).toContain(REMOTE_MARKER)
+    expect(result.mode).toBe('mainnet')
+    expect(backend.calls).toHaveLength(1)
+  })
+
+  it('leaves the backend untouched in mock, even with one configured and reachable', async () => {
+    const result = await analyze({ ...dispute, mode: 'mock' }, { endpoint: backend.url })
+    expect(result.rationale).not.toContain(REMOTE_MARKER)
+    expect(backend.calls).toHaveLength(0)
+  })
+
+  it('carries an idempotency key across to the backend', async () => {
+    const key = '9c2f4d10-7b3e-4a58-8d61-2e0f7a9c4b3d'
+    await analyze(
+      { ...dispute, mode: 'mainnet', idempotency_key: key },
+      { endpoint: backend.url },
+    )
+    expect(backend.calls[0]?.idempotency_key).toBe(key)
+  })
+
+  it('reports progress from a paying call and stays silent in mock', async () => {
+    await backend.close()
+    backend = await startFakeBackend({
+      progress: [{ progress: 1, total: 9, message: 'stand-in-model-a · strict' }],
+    })
+
+    const paying: number[] = []
+    await analyze(
+      { ...dispute, mode: 'mainnet' },
+      { endpoint: backend.url, onProgress: (e) => paying.push(e.progress) },
+    )
+    expect(paying).toEqual([1])
+
+    const mocked: number[] = []
+    await analyze(
+      { ...dispute, mode: 'mock' },
+      { endpoint: backend.url, onProgress: (e) => mocked.push(e.progress) },
+    )
+    expect(mocked).toEqual([])
+  })
 })

@@ -1,25 +1,14 @@
 /**
  * Mode dispatch: turn a validated dispute into a panel.
  *
- * Mock is served here, entirely from the embedded fixture. The paying modes are wired up in
- * ticket 04 and currently fail hard — deliberately, and see `UnavailableError` below.
+ * The one place that decides where a panel comes from. Mock is served here from the embedded
+ * fixture, entirely offline; the paying modes cross to the deployed backend through `backend.ts`.
+ * Both return the same `PanelResponse` to the same renderer — the split is in where the data comes
+ * from, never in what the caller gets back.
  */
+import { callBackend, type ProgressListener } from './backend.js'
 import { AnalyzeDisputeInput, MODES, type Mode, type PanelResponse } from './contract.js'
 import { MOCK_PANEL } from './fixture.js'
-
-/**
- * A paying mode could not be served.
- *
- * This is always an error and never a quiet downgrade to mock. A paying caller receiving fixture
- * data and believing it to be analysis is the one unrecoverable trust failure in this product
- * (ADR-0012, wire contract §6), so every path that cannot reach the backend ends up here.
- */
-export class UnavailableError extends Error {
-  override readonly name = 'UnavailableError'
-  constructor(message: string) {
-    super(message)
-  }
-}
 
 /**
  * Resolve which mode a call runs in: an explicit per-call value wins, else the mode this server was
@@ -37,14 +26,16 @@ export function resolveMode(explicit: Mode | undefined, env: string | undefined)
   )
 }
 
-/** The message to show a caller for a thrown value, whatever was thrown. */
-export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
 export type AnalyzeOptions = {
   /** The mode this server was registered with, normally `process.env.ASK_TRIVIUM_MODE`. */
   envMode?: string | undefined
+  /** The backend URL, normally `process.env.ASK_TRIVIUM_ENDPOINT`. Ignored in mock. */
+  endpoint?: string | undefined
+  /**
+   * Called for each progress notification from the backend. Never fires in mock, which has no
+   * work to report on: it returns in microseconds and a progress bar for it would be theatre.
+   */
+  onProgress?: ProgressListener | undefined
 }
 
 /**
@@ -60,13 +51,26 @@ export async function analyze(raw: unknown, options: AnalyzeOptions = {}): Promi
   const mode = resolveMode(input.mode, envMode)
 
   if (mode === 'mock') {
-    // Structurally cloned so a caller mutating the result cannot poison the next call.
+    // Returned before anything touches the endpoint or the network — the offline guarantee is this
+    // early return and nothing else (ADR-0012). Structurally cloned so a caller mutating the result
+    // cannot poison the next call.
     return structuredClone(MOCK_PANEL)
   }
 
-  throw new UnavailableError(
-    `Mode "${mode}" is not available in this build: the connection to the Trivium backend is not ` +
-      `wired up yet. This call was NOT charged and no analysis was run. ` +
-      `Use mode: "mock" for a complete offline example panel.`,
+  return callBackend(
+    {
+      title: input.title,
+      content: input.content,
+      mode,
+      idempotency_key: input.idempotency_key,
+    },
+    {
+      // Forwarded by key rather than spread, so adding an option to `AnalyzeOptions` cannot
+      // accidentally start meaning something to the backend call. Passed straight through when
+      // absent: `callBackend` owns the endpoint / environment / default order, and second-guessing
+      // it here is what would make one caller quietly ignore `ASK_TRIVIUM_ENDPOINT`.
+      endpoint: options.endpoint,
+      onProgress: options.onProgress,
+    },
   )
 }

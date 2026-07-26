@@ -6,9 +6,12 @@
  * human and an agent are looking at the identical panel.
  */
 import { Cli, z } from 'incur'
-import { analyze, errorMessage } from './analyze.js'
+import { analyze } from './analyze.js'
+import type { ProgressListener } from './backend.js'
 import { MODES, PanelResponse } from './contract.js'
+import { errorMessage } from './errors.js'
 import { renderPanel } from './render.js'
+import { VERSION } from './version.js'
 
 /** Read piped stdin, so a long dispute can arrive as `cat complaint.txt | ask-trivium analyze "..."`. */
 async function readStdin(): Promise<string> {
@@ -44,8 +47,24 @@ const EXAMPLE_DISPUTE = {
   content: '"Bought on 3 March, screen failed in May, retailer blamed accidental damage."',
 } as const
 
+/**
+ * Show a live count of the panel filling in, for a human watching a real analysis run.
+ *
+ * On **stderr**, always: stdout carries either the panel or the structured envelope, and a progress
+ * line landing in the middle of piped JSON corrupts it. Gated on stderr being a terminal so that
+ * `2> log` collects a log rather than a flipbook, and so a caller redirecting both streams gets
+ * neither surprise.
+ */
+function terminalProgress(): ProgressListener | undefined {
+  if (!process.stderr.isTTY) return undefined
+  return ({ progress, total, message }) => {
+    const count = total === undefined ? `${progress}` : `${progress}/${total}`
+    process.stderr.write(`  ${count}  ${message ?? 'analysing'}\n`)
+  }
+}
+
 export const cli = Cli.create('ask-trivium', {
-  version: '0.1.0',
+  version: VERSION,
   description:
     'Predict how Kleros jurors would rule on a consumer dispute, using a panel of nine ' +
     'independent LLM analyses. Also runs as a local MCP server with --mcp.',
@@ -118,12 +137,15 @@ cli.command('analyze', {
       })
 
     try {
-      const result = await analyze({
-        title: c.args.title,
-        content,
-        mode: c.options.mode,
-        idempotency_key: c.options.idempotencyKey,
-      })
+      const result = await analyze(
+        {
+          title: c.args.title,
+          content,
+          mode: c.options.mode,
+          idempotency_key: c.options.idempotencyKey,
+        },
+        { onProgress: terminalProgress() },
+      )
       const rendered = `${renderPanel(result)}\n`
 
       // `--panel` is the explicit half of a selector that is otherwise invisible: the machine form
