@@ -5,3 +5,8 @@ skills-lock.json
 # Build output and dependencies
 node_modules/
 dist/
+
+# Secrets. This repo is the public submission and it is the half that holds the
+# wallet — a committed key here is a funded key on a public remote.
+.env
+.env.*
