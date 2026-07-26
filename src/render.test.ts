@@ -34,8 +34,11 @@ describe('renderPanel', () => {
 
   it('shows the verdict, score, agreement and rationale', () => {
     const flat = flatten(out)
-    expect(flat).toContain('72')
-    expect(flat.toLowerCase()).toContain('moderate')
+    // Read these off the panel rather than hard-coding them. The fixture is a real capture and is
+    // meant to be replaced by a later one; a recapture should not be able to fail this quietly on
+    // numbers that were never the point of the test.
+    expect(flat).toContain(String(MOCK_PANEL.score))
+    expect(flat.toLowerCase()).toContain(MOCK_PANEL.agreement)
     expect(flat).toContain(flatten(MOCK_PANEL.rationale))
   })
 

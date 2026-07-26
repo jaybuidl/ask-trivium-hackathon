@@ -7,7 +7,7 @@ import {
   type FakeBackend,
 } from './backend.testkit.js'
 import { PanelResponse } from './contract.js'
-import { MOCK_DISPUTE_TITLE } from './fixture.js'
+import { MOCK_DISPUTE_TITLE, MOCK_PANEL } from './fixture.js'
 
 const dispute = {
   title: 'Airline refused compensation for a cancelled flight',
@@ -73,7 +73,7 @@ describe('analyze in mock mode', () => {
     first.decision = 'company_wins'
     const second = await analyze({ ...dispute, mode: 'mock' })
     expect(second.panel[0]!.reasoning).not.toBe('tampered')
-    expect(second.decision).toBe('user_wins')
+    expect(second.decision).toBe(MOCK_PANEL.decision)
   })
 
   it('applies the registration default when no mode is given', async () => {

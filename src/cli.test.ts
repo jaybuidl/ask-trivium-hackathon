@@ -14,6 +14,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { cellCount } from './cli.js'
+import { MOCK_PANEL } from './fixture.js'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -47,7 +48,7 @@ describe('trap 3 — piping changes the output format', () => {
     expect(code).toBe(0)
     // The machine form: flat keys, no rendering. This is deliberate and is what an agent shelling
     // out to the CLI needs; the test exists so that changing it is a decision, not an accident.
-    expect(stdout).toMatch(/decision: user_wins/)
+    expect(stdout).toContain(`decision: ${MOCK_PANEL.decision}`)
     expect(stdout).not.toMatch(/VERDICT/)
   }, 30_000)
 
