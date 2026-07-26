@@ -67,6 +67,8 @@ export type RecordedCall = {
   content: string
   mode: string
   idempotency_key?: string
+  /** The signed authorization this call carried, if any. Absent on an unpaid first attempt. */
+  payment?: unknown
 }
 
 export type FakeBackendOptions = {
@@ -78,6 +80,16 @@ export type FakeBackendOptions = {
   payload?: (call: RecordedCall) => unknown
   /** Respond the way a backend reporting a failed call does: `isError` with text, not a throw. */
   toolError?: string
+  /**
+   * Demand payment for an unpaid call, the way §5 says a paid backend does: an `isError` result
+   * whose `structuredContent` is the `PaymentRequired`, not a thrown transport error.
+   */
+  requirePayment?: boolean
+  /**
+   * What to put in `_meta["x402/payment-response"]` on a paid call. Omitted, a paid call settles
+   * cleanly; set it to a failure to reproduce ADR-0014's deliver-anyway case.
+   */
+  settlement?: Record<string, unknown>
 }
 
 export type FakeBackend = {
@@ -123,8 +135,39 @@ export async function startFakeBackend(options: FakeBackendOptions = {}): Promis
         // would stop this server from serving the malformed payload the hard-failure test needs.
       },
       async (args, extra) => {
-        const call = args as RecordedCall
+        const payment = extra._meta?.['x402/payment']
+        const call = { ...(args as RecordedCall), ...(payment === undefined ? {} : { payment }) }
         calls.push(call)
+
+        // §5's challenge, and the reason it is checked before any work happens: an unpaid call must
+        // cost the backend nothing, or the paywall is decorative.
+        if (options.requirePayment && payment === undefined) {
+          const paymentRequired = {
+            x402Version: 2,
+            accepts: [
+              {
+                scheme: 'exact',
+                network: 'eip155:8453',
+                amount: '1000000',
+                asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+                payTo: '0x9d2C4500A902d6c5e5DC2dF336D015A94197937D',
+                maxTimeoutSeconds: 300,
+                resource: 'mcp://tool/analyze_dispute',
+                // The EIP-712 domain of the asset being signed over. Not optional: without it the
+                // client cannot build the `transferWithAuthorization` digest and refuses to sign.
+                // These are Base mainnet USDC's real values, read off the contract — a stand-in
+                // that omitted them would let a broken challenge pass the tests.
+                extra: { name: 'USD Coin', version: '2' },
+              },
+            ],
+            error: 'Payment required',
+          }
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(paymentRequired) }],
+            structuredContent: paymentRequired,
+            isError: true,
+          }
+        }
 
         const token = extra._meta?.['progressToken']
         for (const step of options.progress ?? []) {
@@ -146,6 +189,17 @@ export async function startFakeBackend(options: FakeBackendOptions = {}): Promis
         return {
           content: [{ type: 'text' as const, text: REMOTE_RENDERED_TEXT }],
           structuredContent: structured as Record<string, unknown>,
+          ...(payment === undefined
+            ? {}
+            : {
+                _meta: {
+                  'x402/payment-response': options.settlement ?? {
+                    success: true,
+                    transaction: '0xstandinsettlementtx',
+                    network: 'eip155:8453',
+                  },
+                },
+              }),
         }
       },
     )

@@ -7,14 +7,17 @@
  * is `render.ts`'s job, and is deliberately identical whether the panel arrived from here or from
  * the embedded fixture. A second rendering path would mean the seam was cut in the wrong place.
  *
- * Payment is not here yet (ticket 06). Wire contract §5 puts it *inside* the JSON-RPC layer as a
- * client-side wrapper around this call, so it lands as a wrapper around the `Client` below rather
- * than as a rewrite of it.
+ * Payment landed in ticket 06 and is §5's shape: the first call comes back as an ordinary tool
+ * result carrying `PaymentRequired`, this file signs it through `payment.ts`, and the *same* call
+ * goes out again with the payload in `_meta`. Both calls carry the identical timeout and progress
+ * policy, which is the reason the payment library's own `callTool` helper is not used — see the
+ * note at the top of `payment.ts`.
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { PanelResponse, type Mode } from './contract.js'
 import { errorMessage, unavailable } from './errors.js'
+import { paymentChallengeIn, paymentMeta, type Payer, resolvePayer } from './payment.js'
 import { VERSION } from './version.js'
 
 /**
@@ -77,6 +80,11 @@ export type BackendCallOptions = {
   onProgress?: ProgressListener | undefined
   /** Overrides {@link DEFAULT_TIMEOUT_MS}. Tests use it; nothing else should need to. */
   timeoutMs?: number | undefined
+  /**
+   * Who signs a payment challenge. Injected so the payment path is testable without a wallet;
+   * omitted, it is resolved from the environment for this tier.
+   */
+  payer?: Payer | null | undefined
 }
 
 /**
@@ -149,11 +157,36 @@ export async function callBackend(
       )
     }
 
-    const result = await callTool(client, request, options)
+    let result = await callTool(client, request, options)
 
-    // An `isError` result is a normal tool result, not a transport failure — which is also how a
-    // `PaymentRequired` will arrive once §5 is wired up. Surfacing the backend's own words matters:
-    // "payment required" and "the models are down" need different things from the caller.
+    // §5's round trip. The first call is unpaid on purpose: the backend quotes its own price and
+    // network rather than the bridge asserting them, so a price change on the far side cannot make
+    // this client sign the wrong amount.
+    const challenge = paymentChallengeIn(result)
+    let paidByThisBridge = false
+
+    if (challenge !== undefined) {
+      const payer = options.payer ?? resolvePayer(mode)
+      if (!payer) {
+        throw unavailable(
+          mode,
+          `the Trivium backend requires payment for '${mode}' and no wallet is configured. ` +
+            `Set ${'ASK_TRIVIUM_PRIVATE_KEY'} to a funded key, or use --mode mock for a free panel.`,
+        )
+      }
+
+      // Signed once, sent once. Registering a recovering `onPaymentResponse` hook here — or
+      // retrying this branch on failure — would sign a *fresh* authorization and re-run the whole
+      // call: a second $1 and a second set of nine model calls, for one panel.
+      const payload = await payer.sign(challenge)
+      paidByThisBridge = true
+      result = await callTool(client, request, options, paymentMeta(payload))
+    }
+
+    // An `isError` result is a normal tool result, not a transport failure. By this point it is no
+    // longer a payment challenge — a second one would mean the payment was rejected — so surfacing
+    // the backend's own words matters: "payment required" and "the models are down" need different
+    // things from the caller.
     if (result.isError) {
       throw unavailable(mode, `the Trivium backend refused the call: ${resultText(result)}.`)
     }
@@ -168,26 +201,34 @@ export async function callBackend(
     }
 
     // §2 puts the tier in the payload precisely so a caller can relay "this was real" without
-    // reading terminal chrome. A payload disagreeing with the call makes that field untrustworthy,
-    // and relabelling it here would be the bridge asserting something it did not witness.
+    // reading terminal chrome. A payload disagreeing with the call makes that field untrustworthy.
     //
-    // **Provisional — see wire contract §7 item 4, which ticket 06 decides.** Rejecting outright is
-    // safe only while nothing charges: today `settled` is always false and the backend echoes
-    // `mode` faithfully, so this cannot fire against the real deployment and no money can be at
-    // stake when it does. Once payment lands it has to be revisited, because ADR-0014 forbids
-    // exactly this shape — "marking a complete, correct panel as an error invites the agent to
-    // discard or retry it, re-creating the double-charge path from the client side."
+    // **§7 item 4, decided here (ticket 06).** The rule splits on whether *this bridge* paid, which
+    // is the one fact it holds first-hand — it signed the authorization, so it does not have to ask
+    // the backend or trust `settled`, a field of the very payload this branch has just called into
+    // question.
     //
-    // Do not fix that by reading `settled` here. It would mean trusting one field of a payload this
-    // branch has just concluded is untrustworthy. The bridge holds the wallet from 06 onward, so it
-    // will know whether *it* paid without having to ask the backend — which is the answer, and is
-    // why this waits for that code rather than guessing ahead of it.
+    // - Paid: deliver, and say the tier disagreed. ADR-0014 forbids failing a complete, correct
+    //   panel once money has moved — "marking a complete, correct panel as an error invites the
+    //   agent to discard or retry it, re-creating the double-charge path from the client side" —
+    //   and ADR-0007 rules out refunds, so a discarded paid panel is simply gone.
+    // - Not paid: reject, exactly as before. Nothing is at stake, and a bridge that quietly
+    //   relabels a free panel as a paid tier is worse than one that refuses.
     if (parsed.data.mode !== mode) {
-      throw unavailable(
-        mode,
-        `the Trivium backend labelled the panel "${parsed.data.mode}", which is not the mode this ` +
-          `call ran in. The panel is being discarded rather than shown under the wrong tier.`,
-      )
+      if (!paidByThisBridge) {
+        throw unavailable(
+          mode,
+          `the Trivium backend labelled the panel "${parsed.data.mode}", which is not the mode ` +
+            `this call ran in. The panel is being discarded rather than shown under the wrong tier.`,
+        )
+      }
+
+      options.onProgress?.({
+        progress: 1,
+        message:
+          `warning: this panel is labelled "${parsed.data.mode}" but the call ran in "${mode}". ` +
+          `It is being delivered rather than discarded because this bridge has already paid for it.`,
+      })
     }
 
     return parsed.data
@@ -203,6 +244,7 @@ async function callTool(
   client: Client,
   request: BackendRequest,
   options: BackendCallOptions,
+  meta?: Record<string, unknown>,
 ): Promise<Awaited<ReturnType<Client['callTool']>>> {
   const { onProgress } = options
   try {
@@ -219,6 +261,10 @@ async function callTool(
             ? {}
             : { idempotency_key: request.idempotency_key }),
         },
+        // §5 carries the signed authorization here rather than in an HTTP header: one Streamable
+        // HTTP session multiplexes initialize, tools/list and tools/call, so a transport-level
+        // paywall would be charging for handshake traffic.
+        ...(meta === undefined ? {} : { _meta: meta }),
       },
       undefined,
       {
