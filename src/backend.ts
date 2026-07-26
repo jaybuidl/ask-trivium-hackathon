@@ -170,6 +170,18 @@ export async function callBackend(
     // §2 puts the tier in the payload precisely so a caller can relay "this was real" without
     // reading terminal chrome. A payload disagreeing with the call makes that field untrustworthy,
     // and relabelling it here would be the bridge asserting something it did not witness.
+    //
+    // **Provisional — see wire contract §7 item 4, which ticket 06 decides.** Rejecting outright is
+    // safe only while nothing charges: today `settled` is always false and the backend echoes
+    // `mode` faithfully, so this cannot fire against the real deployment and no money can be at
+    // stake when it does. Once payment lands it has to be revisited, because ADR-0014 forbids
+    // exactly this shape — "marking a complete, correct panel as an error invites the agent to
+    // discard or retry it, re-creating the double-charge path from the client side."
+    //
+    // Do not fix that by reading `settled` here. It would mean trusting one field of a payload this
+    // branch has just concluded is untrustworthy. The bridge holds the wallet from 06 onward, so it
+    // will know whether *it* paid without having to ask the backend — which is the answer, and is
+    // why this waits for that code rather than guessing ahead of it.
     if (parsed.data.mode !== mode) {
       throw unavailable(
         mode,

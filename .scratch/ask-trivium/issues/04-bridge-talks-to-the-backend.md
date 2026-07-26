@@ -67,13 +67,27 @@ slower than the agent's own timeout survives because of it.
   test is not "will this run need it" but "did somebody set it"; and checking only in a paying mode
   would miss it anyway, since a mock-registered bridge can be asked for mainnet per call (ADR-0011).
 
-### A contract question this raised, for whoever picks up 05/06
+### A contract question this raised — filed as §7 item 4, ticket 06
 
 The bridge rejects a panel whose `mode` disagrees with the mode the call ran in, rather than
 relabelling it — §2 puts the tier in the payload so a caller can relay "this was real" without
 reading terminal chrome, and a payload that contradicts the call makes that field worthless. The
 backend currently echoes `mode` faithfully, so nothing hits this. It is not written down in §1–§6
 as an obligation, though, and it is now load-bearing on this side.
+
+**Left as it is, deliberately, and filed rather than fixed.** The rejection is safe only while
+nothing charges: today `settled` is always false and the backend echoes faithfully, so it cannot
+fire against the real deployment and no money can be at stake when it does. Once payment lands,
+ADR-0014 forbids its shape — *"marking a complete, correct panel as an error invites the agent to
+discard or retry it, re-creating the double-charge path from the client side"* — and ADR-0007 has
+ruled out refunds, so a discarded paid panel is unrecoverable.
+
+Changing it now would mean designing blind. The obvious client-side fix, reading `settled` and
+delivering anything paid for, is circular — it trusts one field of a payload the same branch has
+just decided is untrustworthy. From ticket 06 the bridge holds the wallet and knows whether *it*
+paid without asking the backend, which is the information this needs. So: no behaviour change, no
+`contract-rev` bump (§7 sits outside the frozen §1–§6), and the question recorded where the ticket
+that gets the information will trip over it.
 
 ### Not in this slice
 

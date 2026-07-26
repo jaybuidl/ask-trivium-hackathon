@@ -8,6 +8,10 @@ progress, skipping settlement on an incomplete panel — is tracked in the backe
 
 **Blocked by:** 04, and the backend serving real panels with progress.
 
+**Decides:** wire contract §7 items 2 (`idempotency_key`'s source) and **4** (what the bridge does
+with a panel whose `mode` disagrees with the call). Item 4 arrived with ticket 04 and is the one
+that can destroy a paid panel — read it before writing the settlement path, not after.
+
 **Status:** ready-for-agent
 
 ## Notes
@@ -48,6 +52,8 @@ not in an example, not in a test, not in a commit that gets amended later.
 - [ ] The payment timeout is set above the worst case, and this is verified rather than assumed
 - [ ] The nine reasoning strings are grepped and the result recorded
 - [ ] `idempotency_key`'s source is decided and recorded in `docs/wire-contract.md`
+- [ ] §7 item 4 is decided and recorded: what the bridge does with a panel whose `mode` disagrees
+      with the call, now that a discarded panel can be one the caller paid for
 
 ## Comments
 
@@ -90,3 +96,14 @@ errors, at whatever hour this gets wired up. Failing loudly at install time is m
 **Proposed contract change, NOT made — needs the backend's agreement.** §5 trap (c) is correct for
 the backend's copy and misleading for this one. It would be worth annotating with which side it
 binds, but the contract is hand-copied and neither side may change it unilaterally.
+
+**The mismatch check ticket 04 left you (§7 item 4).** `backend.ts` rejects a panel whose `mode`
+disagrees with the mode the call ran in. That is safe only while nothing charges — and this ticket
+is what makes it charge. ADR-0014 forbids its shape once money moves: *"marking a complete, correct
+panel as an error invites the agent to discard or retry it, re-creating the double-charge path from
+the client side"*, and ADR-0007 has already ruled out refunds, so a discarded paid panel is gone.
+
+Do not reach for the obvious fix of reading `settled` and delivering anything that was paid for: it
+trusts one field of a payload the same branch has just decided is untrustworthy. Once this ticket
+lands the bridge holds the wallet and knows whether **it** paid, from its own payment response,
+without asking the backend. That is the information the decision was waiting for.

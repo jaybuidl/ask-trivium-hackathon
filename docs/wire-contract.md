@@ -325,7 +325,7 @@ wallet management, output rendering, this contract's schemas, and the embedded m
 
 ## 7. Still open
 
-Two questions remain. Each is assigned to the ticket that cannot be written without it — decide it
+Three questions remain. Each is assigned to the ticket that cannot be written without it — decide it
 there, record the decision in this file, and mirror it to the backend's copy.
 
 1. ~~**Does `detail` survive?**~~ **DECIDED (ticket 02): it does not.** One response shape,
@@ -342,3 +342,20 @@ there, record the decision in this file, and mirror it to the backend's copy.
    would otherwise have paid in full for. Probably fine; decide it rather than discover it. —
    ticket 05 on the server side, but the bridge renders it, so agree it before building the
    renderer.
+4. **What does the bridge do with a panel whose `mode` disagrees with the mode the call ran in?**
+   Nothing in §1–§6 obliges the backend to echo `mode` faithfully. It does today, and ticket 04
+   started relying on it: the bridge rejects a mismatch outright rather than relabelling the panel,
+   because §2 puts the tier in the payload so a caller can relay "this was real" without reading
+   terminal chrome, and a payload contradicting the call makes that field worthless.
+
+   That rejection is **provisional and safe only while nothing charges.** ADR-0014 forbids its
+   shape once money moves — "marking a complete, correct panel as an error invites the agent to
+   discard or retry it, re-creating the double-charge path from the client side" — and ADR-0007 has
+   already ruled out a refund path, so a discarded paid panel is unrecoverable.
+
+   Two things to settle together, not separately: whether the backend owes a faithful echo at all,
+   and what the bridge does when it does not get one. Note that the obvious client-side fix — read
+   `settled` and deliver anything that was paid for — is circular, since it trusts one field of a
+   payload the same branch has just decided is untrustworthy. From ticket 06 the bridge holds the
+   wallet and knows whether *it* paid without asking, which is the information this needs and the
+   reason it waits. — **ticket 06**, alongside item 2.
